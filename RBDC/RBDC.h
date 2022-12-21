@@ -6,14 +6,17 @@
 #define CATIE_SIXTRON_RBDC_H_
 
 #include <stdint.h>
-#include <pid.h>
+#include "RBDC/odometry.h"
+#include "RBDC/motor_control.h"
 
 namespace sixtron {
 
     class RobotBaseDriveControl {
 
     public:
-        RobotBaseDriveControl();
+        RobotBaseDriveControl(Odometry* odometry, MotorControl* motor_control);
+        Odometry* odometry;
+        MotorControl* motor_control;
 
         void compute();
 

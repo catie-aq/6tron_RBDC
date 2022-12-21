@@ -7,15 +7,76 @@
 
 #include <stdint.h>
 #include <pid.h>
+#include <math.h>
 
 namespace sixtron {
 
-    class RobotBaseDriveControl {
+    //Defines for direction, useful for 2 wheels robots only ?
+#define RBDC_DIR_FORWARD             (1)
+#define RBDC_DIR_BACKWARD            (-1)
+
+    typedef enum {
+        two_wheels_robot,
+        three_wheels_robot,
+        four_wheels_robot
+    } RBDC_format;
+
+    typedef enum {
+        RBDC_working, // robot is moving to the target position
+        RBDC_done, // robot arrive on target
+        RBDC_error // something wrong happened
+    } RBDC_status;
+
+/*!
+ *  \struct RBDC_param
+ *  PID parameters structure
+ */
+    typedef struct RBDC_params RBDC_params;
+    struct RBDC_params {
+        RBDC_format rbdc_format = two_wheels_robot;
+        PID_params pid_param_dv, pid_param_dteta;
+        float max_output = 1.0f; // max command output, eg -1.0f to +1.0f
+        float theta_precision = 0.0f;
+        float dv_precision = 0.0f;
+        float dt_seconds = 0.0f;
+        bool can_go_backward = true;
+    };
+
+    typedef struct RBDC_outputs RBDC_outputs;
+    struct RBDC_outputs {
+        float cmd_vel = 0.0f;
+        float cmd_rot = 0.0f;
+        float cmd_tra = 0.0f; // for omnidirectional drive robots (more than 2 wheels)
+    };
+
+
+    typedef struct RBDC_position RBDC_position;
+    struct RBDC_position {
+        float x = 0.0f;
+        float y = 0.0f;
+        float theta = 0.0f;
+    };
+
+    class RBDC {
 
     public:
-        RobotBaseDriveControl();
+        RBDC(RBDC_params rbdc_parameters);
 
-        void compute();
+        void setTarget(RBDC_position target_pos);
+
+        RBDC_status compute(RBDC_position curent_pos);
+
+        RBDC_outputs getSpeeds();
+
+        RBDC_params _parameters;
+
+    private:
+
+        RBDC_position _target_pos;
+        PID _pid_dv, _pid_dtheta;
+        PID_args _args_pid_dv, _args_pid_dtheta;
+
+        int _compute_dv_off = 0, _compute_first_angle = 1, _compute_cap_dv = 0;
 
     };
 

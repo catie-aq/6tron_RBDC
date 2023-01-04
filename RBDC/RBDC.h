@@ -23,8 +23,12 @@ namespace sixtron {
 
     typedef enum {
         RBDC_working, // robot is moving to the target position
-        RBDC_done, // robot arrive on target
-        RBDC_error // something wrong happened
+        RBDC_error, // something wrong happened
+        RBDC_done, // 1.1.1 robot arrive on target
+        RBDC_correct_final_angle, // 1.1.2
+        RBDC_moving, // 1.2.1
+        RBDC_moving_and_correct_angle, // 1.2.2.1
+        RBDC_correct_initial_angle, // 1.2.2.2
     } RBDC_status;
 
 /*!
@@ -76,7 +80,8 @@ namespace sixtron {
         PID _pid_dv, _pid_dtheta;
         PID_args _args_pid_dv, _args_pid_dtheta;
 
-        int _compute_dv_off = 0, _compute_first_angle = 1, _compute_cap_dv = 0;
+        float _target_angle,_delta_angle;
+        int _compute_dv_off, _compute_XY_angle, _compute_last_angle, _compute_cap_dv;
 
     };
 

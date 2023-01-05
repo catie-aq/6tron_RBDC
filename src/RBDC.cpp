@@ -62,11 +62,11 @@ namespace sixtron {
                 // 1.1.2 A : No it is not.
 
                 // Cap delta angle first
-                if (delta_angle > float(M_PI_2)) {
-                    delta_angle -= float(M_PI);
-                } else if (delta_angle < -float(M_PI_2)) {
-                    delta_angle += float(M_PI);
-                }
+//                if (delta_angle > float(M_PI_2)) {
+//                    delta_angle -= float(M_PI);
+//                } else if (delta_angle < -float(M_PI_2)) {
+//                    delta_angle += float(M_PI);
+//                }
 
                 // then update pid theta
                 _args_pid_dtheta.actual = 0.0f;
@@ -96,7 +96,7 @@ namespace sixtron {
             }
 
             // update pid theta
-            _args_pid_dtheta.actual = 0.0f;
+            _args_pid_dtheta.actual = 0.0f ;
             _args_pid_dtheta.target = delta_angle;
             _pid_dtheta.compute(&_args_pid_dtheta);
 

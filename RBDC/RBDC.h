@@ -22,13 +22,12 @@ namespace sixtron {
     } RBDC_format;
 
     typedef enum {
-        RBDC_working, // robot is moving to the target position
-        RBDC_error, // something wrong happened
-        RBDC_done, // 1.1.1 robot arrive on target
-        RBDC_correct_final_angle, // 1.1.2
-        RBDC_moving, // 1.2.1
-        RBDC_moving_and_correct_angle, // 1.2.2.1
-        RBDC_correct_initial_angle, // 1.2.2.2
+        RBDC_working = 0,
+        RBDC_done = 1, // 1.1.1 robot arrive on target
+        RBDC_correct_final_angle = 2, // 1.1.2
+        RBDC_moving = 3, // 1.2.1
+        RBDC_moving_and_correct_angle = 4, // 1.2.2.1
+        RBDC_correct_initial_angle = 5, // 1.2.2.2
     } RBDC_status;
 
 /*!

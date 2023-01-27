@@ -6,10 +6,10 @@
 
 namespace sixtron {
 
-
-    RBDC::RBDC(RBDC_params rbdc_parameters) : _parameters(rbdc_parameters),
-                                              _pid_dv(rbdc_parameters.pid_param_dv, rbdc_parameters.dt_seconds),
-                                              _pid_dtheta(rbdc_parameters.pid_param_dteta, rbdc_parameters.dt_seconds) {
+    RBDC::RBDC(RBDC_params rbdc_parameters):
+            _parameters(rbdc_parameters),
+            _pid_dv(rbdc_parameters.pid_param_dv, rbdc_parameters.dt_seconds),
+            _pid_dtheta(rbdc_parameters.pid_param_dteta, rbdc_parameters.dt_seconds) {
 
         _compute_XY_angle = 1;
         _compute_last_angle = 0;
@@ -23,7 +23,6 @@ namespace sixtron {
         // Check and copy new targets values
         _target_pos = target_pos;
     }
-
 
     static inline float getDeltaFromTargetTHETA(float target_angle_deg, float current_angle) {
 
@@ -56,17 +55,11 @@ namespace sixtron {
             // 1.1 Q : Is target angle (or final angle) correct ?
             if (abs(delta_angle) < _parameters.theta_precision) {
                 // 1.1.1 A : Yes it is. The robot base is in target position.
-                _args_pid_dtheta.output = 0.0f; // be sure to stop correcting dtheta, as precision is reached.
+                _args_pid_dtheta.output
+                        = 0.0f; // be sure to stop correcting dtheta, as precision is reached.
                 return RBDC_status::RBDC_done;
             } else {
                 // 1.1.2 A : No it is not.
-
-                // Cap delta angle first
-//                if (delta_angle > float(M_PI_2)) {
-//                    delta_angle -= float(M_PI);
-//                } else if (delta_angle < -float(M_PI_2)) {
-//                    delta_angle += float(M_PI);
-//                }
 
                 // then update pid theta
                 _args_pid_dtheta.actual = 0.0f;
@@ -80,7 +73,8 @@ namespace sixtron {
             // 1.2 A : No it isn't. The base has to move to the target position.
 
             // Compute the angle error based on target X/Y
-            float target_angle = (atan2f((_target_pos.y - current_pos.y), (_target_pos.x - current_pos.x)));
+            float target_angle
+                    = (atan2f((_target_pos.y - current_pos.y), (_target_pos.x - current_pos.x)));
             float delta_angle = getDeltaFromTargetTHETA(target_angle, current_pos.theta);
 
             float running_direction = RBDC_DIR_FORWARD;
@@ -96,13 +90,13 @@ namespace sixtron {
             }
 
             // update pid theta
-            _args_pid_dtheta.actual = 0.0f ;
+            _args_pid_dtheta.actual = 0.0f;
             _args_pid_dtheta.target = delta_angle;
             _pid_dtheta.compute(&_args_pid_dtheta);
 
             // 1.2 Q : Is the base align with the target position (angle thinking) ?
             if (abs(delta_angle) < _parameters.theta_precision) {
-                //1.2.1 A : Yes it is.
+                // 1.2.1 A : Yes it is.
 
                 error_dv = running_direction * error_dv; // Add direction of moving
 
@@ -114,22 +108,21 @@ namespace sixtron {
                 return RBDC_status::RBDC_moving;
 
             } else {
-                //1.2.2 A : No it isn't. Angle must be corrected.
+                // 1.2.2 A : No it isn't. Angle must be corrected.
 
-                //1.2.2 Q : Is the robot already moving ?
+                // 1.2.2 Q : Is the robot already moving ?
                 if (_args_pid_dv.output == 0.0f) {
-                    //1.2.2.2 A : No it is not. Must be the first angle.
+                    // 1.2.2.2 A : No it is not. Must be the first angle.
                     return RBDC_status::RBDC_correct_initial_angle;
                 } else {
-                    // 1.2.2.1 A : Yes it is. The Base is probably already moving to the target position.
-                    // But, the PID Theta can't keep up (maybe output PWM are already at max)
+                    // 1.2.2.1 A : Yes it is. The Base is probably already moving to the target
+                    // position. But, the PID Theta can't keep up (maybe output PWM are already at max)
                     // So we need to reduce the speed, in order for the angle to be corrected correctly.
                     _args_pid_dv.output = _args_pid_dv.output * 0.80f; // reduce by 20%
                     return RBDC_status::RBDC_moving_and_correct_angle;
                 }
             }
         }
-
     }
 
     RBDC_outputs RBDC::getSpeeds() {

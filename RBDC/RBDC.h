@@ -68,11 +68,10 @@ public:
 
     RBDC_outputs getSpeeds();
 
-    RBDC_params _parameters;
-
 private:
     Odometry *_odometry;
 
+    RBDC_params _parameters;
     position _target_pos;
     PID _pid_dv, _pid_dtheta;
     PID_args _args_pid_dv, _args_pid_dtheta;

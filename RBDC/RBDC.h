@@ -6,8 +6,10 @@
 #define CATIE_SIXTRON_RBDC_H_
 
 #include <math.h>
-#include <pid.h>
 #include <stdint.h>
+
+#include "odometry/odometry.h"
+#include "pid/pid.h"
 
 namespace sixtron {
 
@@ -55,29 +57,23 @@ struct RBDC_outputs {
     float cmd_tra = 0.0f; // for omnidirectional drive robots (more than 2 wheels)
 };
 
-typedef struct RBDC_position RBDC_position;
-
-struct RBDC_position {
-    float x = 0.0f;
-    float y = 0.0f;
-    float theta = 0.0f;
-};
-
 class RBDC {
 
 public:
-    RBDC(RBDC_params rbdc_parameters);
+    RBDC(Odometry *odometry, RBDC_params rbdc_parameters);
 
-    void setTarget(RBDC_position target_pos);
+    void setTarget(position target_pos);
 
-    RBDC_status compute(RBDC_position curent_pos);
+    RBDC_status update();
 
     RBDC_outputs getSpeeds();
 
     RBDC_params _parameters;
 
 private:
-    RBDC_position _target_pos;
+    Odometry *_odometry;
+
+    position _target_pos;
     PID _pid_dv, _pid_dtheta;
     PID_args _args_pid_dv, _args_pid_dtheta;
 };

@@ -6,15 +6,18 @@
 
 namespace sixtron {
 
-RBDC::RBDC(RBDC_params rbdc_parameters):
+RBDC::RBDC(Odometry *odometry, RBDC_params rbdc_parameters):
         _parameters(rbdc_parameters),
+        _odometry(odometry),
         _pid_dv(rbdc_parameters.pid_param_dv, rbdc_parameters.dt_seconds),
         _pid_dtheta(rbdc_parameters.pid_param_dteta, rbdc_parameters.dt_seconds)
 {
     _pid_dv.setLimit(sixtron::PID_limit::output_limit_HL, _parameters.max_output);
+
+    _odometry->init();
 }
 
-void RBDC::setTarget(RBDC_position target_pos)
+void RBDC::setTarget(position target_pos)
 {
 
     // Check and copy new targets values
@@ -35,11 +38,13 @@ static inline float getDeltaFromTargetTHETA(float target_angle_deg, float curren
     return delta;
 }
 
-RBDC_status RBDC::compute(RBDC_position current_pos)
+RBDC_status RBDC::update()
 {
 
-    float e_x = _target_pos.x - current_pos.x;
-    float e_y = _target_pos.y - current_pos.y;
+    _odometry->update();
+
+    float e_x = _target_pos.x - _odometry->getX();
+    float e_y = _target_pos.y - _odometry->getY();
     float error_dv = sqrtf((e_x * e_x) + (e_y * e_y));
 
     // 1 Q : Is robot inside the target zone ?
@@ -49,7 +54,7 @@ RBDC_status RBDC::compute(RBDC_position current_pos)
         // Be sure that dv is shutdown
         _args_pid_dv.output = 0.0f;
         // Compute the final angle
-        float delta_angle = getDeltaFromTargetTHETA(_target_pos.theta, current_pos.theta);
+        float delta_angle = getDeltaFromTargetTHETA(_target_pos.theta, _odometry->getTheta());
 
         // 1.1 Q : Is target angle (or final angle) correct ?
         if (abs(delta_angle) < _parameters.theta_precision) {
@@ -72,9 +77,9 @@ RBDC_status RBDC::compute(RBDC_position current_pos)
         // 1.2 A : No it isn't. The base has to move to the target position.
 
         // Compute the angle error based on target X/Y
-        float target_angle
-                = (atan2f((_target_pos.y - current_pos.y), (_target_pos.x - current_pos.x)));
-        float delta_angle = getDeltaFromTargetTHETA(target_angle, current_pos.theta);
+        float target_angle = (atan2f(
+                (_target_pos.y - _odometry->getY()), (_target_pos.x - _odometry->getX())));
+        float delta_angle = getDeltaFromTargetTHETA(target_angle, _odometry->getTheta());
 
         float running_direction = RBDC_DIR_FORWARD;
         // Check if it is better to go backward or not. Update delta angle accordingly.

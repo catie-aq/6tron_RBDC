@@ -80,9 +80,6 @@ private:
     RBDC_position _target_pos;
     PID _pid_dv, _pid_dtheta;
     PID_args _args_pid_dv, _args_pid_dtheta;
-
-    float _target_angle, _delta_angle;
-    int _compute_dv_off, _compute_XY_angle, _compute_last_angle, _compute_cap_dv;
 };
 
 } // namespace sixtron

@@ -11,11 +11,6 @@ RBDC::RBDC(RBDC_params rbdc_parameters):
         _pid_dv(rbdc_parameters.pid_param_dv, rbdc_parameters.dt_seconds),
         _pid_dtheta(rbdc_parameters.pid_param_dteta, rbdc_parameters.dt_seconds)
 {
-
-    _compute_XY_angle = 1;
-    _compute_last_angle = 0;
-    _compute_cap_dv = 0;
-
     _pid_dv.setLimit(sixtron::PID_limit::output_limit_HL, _parameters.max_output);
 }
 

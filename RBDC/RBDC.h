@@ -8,6 +8,7 @@
 #include <math.h>
 #include <stdint.h>
 
+#include "motor_base/motor_base.h"
 #include "odometry/odometry.h"
 #include "pid/pid.h"
 
@@ -49,27 +50,20 @@ struct RBDC_params {
     bool can_go_backward = true;
 };
 
-typedef struct RBDC_outputs RBDC_outputs;
-
-struct RBDC_outputs {
-    float cmd_vel = 0.0f;
-    float cmd_rot = 0.0f;
-    float cmd_tra = 0.0f; // for omnidirectional drive robots (more than 2 wheels)
-};
-
 class RBDC {
 
 public:
-    RBDC(Odometry *odometry, RBDC_params rbdc_parameters);
+    RBDC(Odometry *odometry, MotorBase *motor_base, RBDC_params rbdc_parameters);
 
     void setTarget(position target_pos);
 
     RBDC_status update();
 
-    RBDC_outputs getSpeeds();
+    //    RBDC_outputs getSpeeds();
 
 private:
     Odometry *_odometry;
+    MotorBase *_motor_base;
 
     RBDC_params _parameters;
     position _target_pos;

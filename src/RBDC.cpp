@@ -6,15 +6,17 @@
 
 namespace sixtron {
 
-RBDC::RBDC(Odometry *odometry, RBDC_params rbdc_parameters):
-        _parameters(rbdc_parameters),
+RBDC::RBDC(Odometry *odometry, MotorBase *motor_base, RBDC_params rbdc_parameters):
         _odometry(odometry),
+        _motor_base(motor_base),
+        _parameters(rbdc_parameters),
         _pid_dv(rbdc_parameters.pid_param_dv, rbdc_parameters.dt_seconds),
         _pid_dtheta(rbdc_parameters.pid_param_dteta, rbdc_parameters.dt_seconds)
 {
     _pid_dv.setLimit(sixtron::PID_limit::output_limit_HL, _parameters.max_output);
 
     _odometry->init();
+    _motor_base->init();
 }
 
 void RBDC::setTarget(position target_pos)
@@ -41,8 +43,11 @@ static inline float getDeltaFromTargetTHETA(float target_angle_deg, float curren
 RBDC_status RBDC::update()
 {
 
+    // ====== Get actual odometry ===========
     _odometry->update();
 
+    // =========== Run RBDC =================
+    RBDC_status rbdc_end_status;
     float e_x = _target_pos.x - _odometry->getX();
     float e_y = _target_pos.y - _odometry->getY();
     float error_dv = sqrtf((e_x * e_x) + (e_y * e_y));
@@ -61,7 +66,7 @@ RBDC_status RBDC::update()
             // 1.1.1 A : Yes it is. The robot base is in target position.
             _args_pid_dtheta.output
                     = 0.0f; // be sure to stop correcting dtheta, as precision is reached.
-            return RBDC_status::RBDC_done;
+            rbdc_end_status = RBDC_status::RBDC_done;
         } else {
             // 1.1.2 A : No it is not.
 
@@ -70,7 +75,7 @@ RBDC_status RBDC::update()
             _args_pid_dtheta.target = delta_angle;
             _pid_dtheta.compute(&_args_pid_dtheta);
 
-            return RBDC_status::RBDC_correct_final_angle;
+            rbdc_end_status = RBDC_status::RBDC_correct_final_angle;
         }
 
     } else {
@@ -109,7 +114,7 @@ RBDC_status RBDC::update()
             _args_pid_dv.target = error_dv;
             _pid_dv.compute(&_args_pid_dv);
 
-            return RBDC_status::RBDC_moving;
+            rbdc_end_status = RBDC_status::RBDC_moving;
 
         } else {
             // 1.2.2 A : No it isn't. Angle must be corrected.
@@ -117,27 +122,26 @@ RBDC_status RBDC::update()
             // 1.2.2 Q : Is the robot already moving ?
             if (_args_pid_dv.output == 0.0f) {
                 // 1.2.2.2 A : No it is not. Must be the first angle.
-                return RBDC_status::RBDC_correct_initial_angle;
+                rbdc_end_status = RBDC_status::RBDC_correct_initial_angle;
             } else {
                 // 1.2.2.1 A : Yes it is. The Base is probably already moving to the target
                 // position. But, the PID Theta can't keep up (maybe output PWM are already at max)
                 // So we need to reduce the speed, in order for the angle to be corrected correctly.
                 _args_pid_dv.output = _args_pid_dv.output * 0.80f; // reduce by 20%
-                return RBDC_status::RBDC_moving_and_correct_angle;
+                rbdc_end_status = RBDC_status::RBDC_moving_and_correct_angle;
             }
         }
     }
-}
 
-RBDC_outputs RBDC::getSpeeds()
-{
+    // ======== Update Motor Base ============
+    target_speeds rbdc_cmds;
+    rbdc_cmds.cmd_rot = _args_pid_dtheta.output;
+    rbdc_cmds.cmd_lin = _args_pid_dv.output;
 
-    RBDC_outputs cmd_outputs;
+    _motor_base->setTargetSpeeds(rbdc_cmds);
+    _motor_base->update();
 
-    cmd_outputs.cmd_rot = _args_pid_dtheta.output;
-    cmd_outputs.cmd_vel = _args_pid_dv.output;
-
-    return cmd_outputs;
+    return rbdc_end_status;
 }
 
 } // namespace sixtron

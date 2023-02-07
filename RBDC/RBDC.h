@@ -25,7 +25,7 @@ typedef enum {
 } RBDC_format;
 
 typedef enum {
-    RBDC_working = 0,
+    RBDC_standby = 0,
     RBDC_done = 1, // 1.1.1 robot arrive on target
     RBDC_correct_final_angle = 2, // 1.1.2
     RBDC_moving = 3, // 1.2.1
@@ -46,7 +46,6 @@ struct RBDC_params {
     float theta_precision = 0.0f;
     float dv_precision = 0.0f;
     float dt_seconds = 0.0f;
-
     bool can_go_backward = true;
 };
 
@@ -57,11 +56,17 @@ public:
 
     void setTarget(position target_pos);
 
+    void cancel(); // cancel current target.
+
+    void stop(); // cancel current target and put RBD in standby mode. Need start to wake up.
+    void start(); // get out of standby mode.
+
     RBDC_status update();
 
-    //    RBDC_outputs getSpeeds();
-
 private:
+    bool _standby = false;
+    void updateMotorBase();
+
     Odometry *_odometry;
     MotorBase *_motor_base;
 

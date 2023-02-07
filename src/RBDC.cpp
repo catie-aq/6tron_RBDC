@@ -46,6 +46,18 @@ RBDC_status RBDC::update()
     // ====== Get actual odometry ===========
     _odometry->update();
 
+    // ======= Standby check ================
+
+    if (_standby) {
+
+        _args_pid_dv.output = 0.0f;
+        _args_pid_dtheta.output = 0.0f;
+
+        updateMotorBase();
+
+        return RBDC_status::RBDC_standby;
+    }
+
     // =========== Run RBDC =================
     RBDC_status rbdc_end_status;
     float e_x = _target_pos.x - _odometry->getX();
@@ -134,14 +146,41 @@ RBDC_status RBDC::update()
     }
 
     // ======== Update Motor Base ============
+    updateMotorBase();
+
+    return rbdc_end_status;
+}
+
+void RBDC::cancel()
+{
+    _target_pos.x = _odometry->getX();
+    _target_pos.y = _odometry->getY();
+    _target_pos.theta = _odometry->getTheta();
+}
+
+void RBDC::stop()
+{
+    if (!_standby) {
+        cancel();
+        _standby = true;
+    }
+}
+
+void RBDC::start()
+{
+    if (_standby) {
+        _standby = false;
+    }
+}
+
+void RBDC::updateMotorBase()
+{
     target_speeds rbdc_cmds;
     rbdc_cmds.cmd_rot = _args_pid_dtheta.output;
     rbdc_cmds.cmd_lin = _args_pid_dv.output;
 
     _motor_base->setTargetSpeeds(rbdc_cmds);
     _motor_base->update();
-
-    return rbdc_end_status;
 }
 
 } // namespace sixtron

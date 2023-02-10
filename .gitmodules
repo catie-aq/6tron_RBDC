@@ -1,9 +1,12 @@
-[submodule "6tron_odometry"]
-	path = 6tron_odometry
-	url = git@github.com:catie-aq/6tron_odometry.git
-[submodule "6tron_motor_base"]
-	path = 6tron_motor_base
-	url = git@github.com:catie-aq/6tron_motor_base.git
-[submodule "6tron_pid"]
-	path = 6tron_pid
+[submodule "pid"]
+	path = pid
 	url = git@github.com:catie-aq/6tron_pid.git
+	branch = master
+[submodule "odometry"]
+	path = odometry
+	url = git@github.com:catie-aq/6tron_odometry.git
+	branch = main
+[submodule "motor_base"]
+	path = motor_base
+	url = git@github.com:catie-aq/6tron_motor_base.git
+	branch = main

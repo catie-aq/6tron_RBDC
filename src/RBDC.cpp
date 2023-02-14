@@ -13,7 +13,8 @@ RBDC::RBDC(Odometry *odometry, MotorBase *motor_base, RBDC_params rbdc_parameter
         _pid_dv(rbdc_parameters.pid_param_dv, rbdc_parameters.dt_seconds),
         _pid_dtheta(rbdc_parameters.pid_param_dteta, rbdc_parameters.dt_seconds)
 {
-    _pid_dv.setLimit(sixtron::PID_limit::output_limit_HL, _parameters.max_output);
+    _pid_dv.setLimit(sixtron::PID_limit::output_limit_HL, _parameters.max_output_dv);
+    _pid_dtheta.setLimit(sixtron::PID_limit::output_limit_HL, _parameters.max_output_dtheta);
 
     _odometry->init();
     _motor_base->init();

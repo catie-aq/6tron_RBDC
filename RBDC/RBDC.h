@@ -42,7 +42,8 @@ typedef struct RBDC_params RBDC_params;
 struct RBDC_params {
     RBDC_format rbdc_format = two_wheels_robot;
     PID_params pid_param_dv, pid_param_dteta;
-    float max_output = 1.0f; // max command output, eg -1.0f to +1.0f
+    float max_output_dtheta = 1.0f; // max command output, eg -1.0f to +1.0f
+    float max_output_dv = 1.0f;
     float theta_precision = 0.0f;
     float dv_precision = 0.0f;
     float dt_seconds = 0.0f;

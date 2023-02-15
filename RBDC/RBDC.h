@@ -44,8 +44,10 @@ struct RBDC_params {
     PID_params pid_param_dv, pid_param_dteta;
     float max_output_dtheta = 1.0f; // max command output, eg -1.0f to +1.0f
     float max_output_dv = 1.0f;
-    float theta_precision = 0.0f;
+    float final_theta_precision = 0.0f;
+    float moving_theta_precision = 0.0f;
     float dv_precision = 0.0f;
+    float dv_reducing_coefficient = 0.80f; // coefficient, between 0.0f and 1.0f;
     float dt_seconds = 0.0f;
     bool can_go_backward = true;
 };
@@ -75,6 +77,7 @@ private:
     position _target_pos;
     PID _pid_dv, _pid_dtheta;
     PID_args _args_pid_dv, _args_pid_dtheta;
+    bool _reduce_dv = false;
 };
 
 } // namespace sixtron

@@ -1,0 +1,100 @@
+@startuml
+'https://plantuml.com/activity-diagram-beta
+skinparam defaultTextAlignment center
+
+title RBDC Activity diagram when update() function is called
+
+start
+:Update odometry;
+
+if (RBDC in standby mode ?) then (true)
+    :Shutdown PIDs
+    dV and dTheta;
+    #Orchid:status = RBDC_standby;
+
+else (false)
+    :Update dV error from
+    current odometry position and
+    requested target X/Y position;
+
+    if (Robot inside the Target Zone ?) then (false)
+
+        label sp_lab
+        label sp_lab
+        :reset dv_zone_reached;
+        label sp_lab
+        label update_dv_dtheta
+
+        :Update dTheta error from
+        current odometry position and
+        requested target X/Y position;
+        :Run PID dTheta with previous
+        compute dTheta Error;
+
+        if (robot allign with target X/Y ?) then (true)
+            :Run PID dV
+            with previous
+            compute dV error;
+            #Orchid:status = RBDC_moving;
+        else (false)
+
+            if(robot already moving ?) then (true))
+                :Reduce PID dV output;
+                #Orchid:status = RBDC_moving_and_correct_angle;
+            else (false)
+                #Orchid:status = RBDC_correct_inital_angle;
+            endif
+
+        endif
+
+
+    else (true)
+
+            if (variable dv_zone_reached set ?) then (true)
+                label sp_lab
+                label sp_lab
+                label sp_lab
+                label sp_lab
+                label into_dv_zone
+                :shutdown PID dV;
+                :Update dTheta error from
+                current odometry orientation
+                and requested final orientation;
+
+                if(final angle correct ?) then (true)
+                    :shutdown PID dTheta;
+                    #Orchid:status = RBDC_done;
+
+                else (false)
+                    :Run PID dTheta with
+                    previous compute dTheta error;
+                    #Orchid:status = RBDC_correcting_final_angle;
+                endif
+
+            else (false)
+                if (robot inside dv zone ?) then (true)
+                    :set dv_zone_reached;
+                    label sp_lab
+                    goto into_dv_zone
+                else (false)
+                   label sp_lab
+                   label sp_lab
+                   goto update_dv_dtheta
+                endif
+
+            endif
+
+
+
+    endif
+
+endif
+
+:Update Motor Base speeds from
+PID dV and PID dTheta outputs;
+
+#Orchid:Return RBDC status;
+
+stop
+
+@enduml

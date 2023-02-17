@@ -22,6 +22,10 @@ RBDC::RBDC(Odometry *odometry, MotorBase *motor_base, RBDC_params rbdc_parameter
         _parameters.dv_reducing_coefficient = 1.0f;
     }
 
+    if (_parameters.dv_precision > _parameters.target_precision) {
+        _parameters.dv_precision = _parameters.target_precision;
+    }
+
     _odometry->init();
     _motor_base->init();
 }
@@ -72,32 +76,44 @@ RBDC_status RBDC::update()
     float error_dv = sqrtf((e_x * e_x) + (e_y * e_y));
 
     // 1 Q : Is robot inside the target zone ?
-    if ((error_dv < _parameters.dv_precision) && (error_dv > -_parameters.dv_precision)) {
+    if ((error_dv < _parameters.target_precision) && (error_dv > -_parameters.target_precision)) {
         // 1.1 A : Yes it is.
 
-        // Be sure that dv is shutdown
-        _args_pid_dv.output = 0.0f;
-        // Compute the final angle
-        float delta_angle = getDeltaFromTargetTHETA(_target_pos.theta, _odometry->getTheta());
+        // Check if robot is inside dv zone. Target zone must be greater than dv zone.
+        if ((error_dv < _parameters.dv_precision) && (error_dv > -_parameters.dv_precision)) {
+            _dv_zone_reached = true;
+        }
 
-        // 1.1 Q : Is target angle (or final angle) correct ?
-        if (abs(delta_angle) < _parameters.final_theta_precision) {
-            // 1.1.1 A : Yes it is. The robot base is in target position.
-            _args_pid_dtheta.output
-                    = 0.0f; // be sure to stop correcting dtheta, as precision is reached.
-            rbdc_end_status = RBDC_status::RBDC_done;
-        } else {
-            // 1.1.2 A : No it is not.
+        // Correct angle ONLY if inside target zone AND dv zone already reached
+        if (_dv_zone_reached) {
+            // Be sure that dv is shutdown
+            _args_pid_dv.output = 0.0f;
+            // Compute the final angle
+            float delta_angle = getDeltaFromTargetTHETA(_target_pos.theta, _odometry->getTheta());
 
-            // then update pid theta
-            _args_pid_dtheta.actual = 0.0f;
-            _args_pid_dtheta.target = delta_angle;
-            _pid_dtheta.compute(&_args_pid_dtheta);
+            // 1.1 Q : Is target angle (or final angle) correct ?
+            if (abs(delta_angle) < _parameters.final_theta_precision) {
+                // 1.1.1 A : Yes it is. The robot base is in target position.
+                _args_pid_dtheta.output
+                        = 0.0f; // be sure to stop correcting dtheta, as precision is reached.
+                rbdc_end_status = RBDC_status::RBDC_done;
+            } else {
+                // 1.1.2 A : No it is not.
 
-            rbdc_end_status = RBDC_status::RBDC_correct_final_angle;
+                // then update pid theta
+                _args_pid_dtheta.actual = 0.0f;
+                _args_pid_dtheta.target = delta_angle;
+                _pid_dtheta.compute(&_args_pid_dtheta);
+
+                rbdc_end_status = RBDC_status::RBDC_correct_final_angle;
+            }
         }
 
     } else {
+        _dv_zone_reached = false;
+    }
+
+    if (!_dv_zone_reached) {
         // 1.2 A : No it isn't. The base has to move to the target position.
 
         // Compute the angle error based on target X/Y
@@ -133,8 +149,6 @@ RBDC_status RBDC::update()
             _args_pid_dv.target = error_dv;
             _pid_dv.compute(&_args_pid_dv);
 
-            _reduce_dv = false; // reset if it has been set before
-
             rbdc_end_status = RBDC_status::RBDC_moving;
 
         } else {
@@ -149,12 +163,9 @@ RBDC_status RBDC::update()
                 // position. But, the PID Theta can't keep up (maybe output PWM are already at max)
                 // So we need to reduce the speed, in order for the angle to be corrected correctly.
 
-                if (!_reduce_dv) {
-                    _reduce_dv = true;
-                    _args_pid_dv.output = _args_pid_dv.output
-                            * _parameters.dv_reducing_coefficient; // reduce by given coefficient,
-                                                                   // only one time
-                }
+                _args_pid_dv.output = _args_pid_dv.output
+                        * _parameters.dv_reducing_coefficient; // reduce by given coefficient,
+                                                               // only one time
 
                 rbdc_end_status = RBDC_status::RBDC_moving_and_correct_angle;
             }

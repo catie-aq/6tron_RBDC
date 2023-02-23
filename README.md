@@ -28,13 +28,13 @@ Additionally, the RBDC depends on two other external classes:
 
 * [**MotorBase**](https://github.com/catie-aq/6tron_motor_base), to send speeds commands to the base.
 
-Theses two classes are defined as **templates**, this means that the user has to define its own child classes for its own application. An example of a custom implementation [can be found here](https://github.com/catie-aq/mbed_RBDC-pokibot-example).
+Theses two classes are defined as **interfaces**, this means that the user has to define its own child classes for its own application. An example of a custom implementation [can be found here](https://github.com/catie-aq/mbed_RBDC-pokibot-example).
 
 ## Behavior
 
 <img title="" src="docs/img/rbdc_activity_diagram.svg" alt="">
 
-The RBDC is working with two PIDs for two wheels robots, and three PIDs for holonome robots:
+The RBDC is working with two PIDs for two wheels robots, and three PIDs for omnidirectional robots:
 
 * One PID for linear movement (dV)
 
@@ -46,7 +46,7 @@ Below are movements disposition for a two wheel-based robot :
 
 <img title="" src="docs/img/base_two_wheels.svg" alt="" width="285" data-align="center">
 
-The RBDC is updated at a fix user-defined rate (e.g. 50Hz or 1kHz). At each update, it doing multiple checks, explained in detail in the RBDC activity diagram above. But, to keep it simple here an example **for a two-wheel robot**:
+The RBDC is updated at a fix user-defined rate (e.g. 50Hz or 1kHz). At each update, it doing multiple checks, explained in detail in the RBDC activity diagram above. But, to keep it simple here an example **for a two-wheeled robot**:
 
 Robot is at [0m;0m;0°] and need to go to [2m;2m;0°]
 
@@ -80,7 +80,7 @@ To get the RBDC working correctly, there is some setup to do:
 
 ### Odometry
 
-The user must create an Odometry class that respect the form and functions used by the RBDC. To do so, [a template has been made](https://github.com/catie-aq/6tron_odometry), that forces the user to respect all features needed by the algorithm.
+The user must create an Odometry class that respect the form and functions used by the RBDC. To do so, [an interface has been made](https://github.com/catie-aq/6tron_odometry), that forces the user to respect all features needed by the algorithm.
 
 This class is needed to get the actual **X**, **Y** and **Theta** of the robot. The user is free to implement this the way he wants, using for example external encoders, or even a lidar.
 
@@ -92,7 +92,7 @@ More info can be found on the [Odometry repository](https://github.com/catie-aq/
 
 ### Motor Base
 
-The user must create a Motor base class that respect the form and functions used by the RBDC. To do so, [a template has been made](https://github.com/catie-aq/6tron_motor_base), that forces the user to respect all features needed by the algorithm.
+The user must create a Motor base class that respect the form and functions used by the RBDC. To do so, [an interface has been made](https://github.com/catie-aq/6tron_motor_base), that forces the user to respect all features needed by the algorithm.
 
 This class is needed to convert **dV**, **dTheta** and **dTan** speeds from RBDC to the actual motor commands of the robot base.
 
@@ -130,7 +130,7 @@ In user implementation, one must first create his own Odometry and MotorBase obj
     // Create robot base. This will init all motors as well.  Will be init by RBDC.
     basePokibot = new sixtron::MotorBasePokibot(dt_pid, sensorLeft, sensorRight);
 
-    a
+    
 ```
 
 Then create and set RBDC parameters...
@@ -199,7 +199,7 @@ Status enum list can be found in the behavior diagram, or [directly in the code]
 
 When RBDC is returning "RBDC_done", then the target has been reached.
 
-## TODO
+## Enhancement
 
 * Holonome implementation (need a third PID dTan ?)
 

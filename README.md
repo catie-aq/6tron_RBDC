@@ -8,7 +8,7 @@ The RBDC library aims to implement a simple robot behavior, to drive any motor b
 
 ## Implementation
 
-The RBDC is written in C++, and not related to a particular framework, even if it is "MbedOs ready" using `.lib` files.
+The RBDC is written in C++, and not related to a particular framework. It will need however two other core libraries to work, Odometry and MotorBase (see below).
 
 It's writing has been improved to keep as a goal the implementation on microcontroller (MCU), like STM32. But it needs some basic requirements.
 
@@ -57,13 +57,13 @@ Robot is at [0m;0m;0°] and need to go to [2m;2m;0°]
 * Next, the robot will move to the target, and check alignment at the same time (using both dV and dTheta PIDs) : moving for 2.8m.
 
 * The robot is now in the target zone. But before doing the final rotation, the RBDC will need to move as close as possible to the center of the target zone : the "dv precision zone".
-
+  
   > Why are we doing this: we want simple movement for the robot. But, because of the nature of a two-wheels robot, we can't move to a tangential movement. So, when reaching the target zone, we cut the dV PID to do the rotation.
-  >
+  > 
   > But, by doing so, and while doing the final rotation, the robot could "slide" out the target zone. This will trigger the RBDC to move again into the target zone, and that could stick the behavior into a loop.
-  >
+  > 
   > By adding a second zone, smaller than the target zone, this will ensure that RBDC can safely rotate in the target zone, without fearing to slide out. So while inside the target zone, the two wheel robot continue to move a bit further before turning off dV and doing the final rotation.
-  >
+  > 
   > For an holonome robot, this process will be much simpler, because all three of PIDs can be updated at the same time.
 
 * Finally, the robot being as close as possible to the target, it can rotate to the target angle : 0°.
@@ -129,8 +129,6 @@ In user implementation, one must first create his own Odometry and MotorBase obj
 
     // Create robot base. This will init all motors as well.  Will be init by RBDC.
     basePokibot = new sixtron::MotorBasePokibot(dt_pid, sensorLeft, sensorRight);
-
-    
 ```
 
 Then create and set RBDC parameters...
@@ -204,7 +202,7 @@ When RBDC is returning "RBDC_done", then the target has been reached.
 * Holonome implementation (need a third PID dTan ?)
 
 * In the README:
-
+  
   * Add images for each RBDC steps
 
 * Considerate an even lighter library written in C, and not using floats. But this will be another repository.  (TIP)

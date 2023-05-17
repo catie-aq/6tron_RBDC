@@ -30,11 +30,57 @@ RBDC::RBDC(Odometry *odometry, MotorBase *motor_base, RBDC_params rbdc_parameter
     _motor_base->init();
 }
 
-void RBDC::setTarget(position target_pos)
+void RBDC::setTarget(float x, float y, float theta, RBDC_reference reference)
 {
+    position target;
+    target.x = x;
+    target.y = y;
+    target.theta = theta;
 
-    // Check and copy new targets values
-    _target_pos = target_pos;
+    setTarget(target, reference);
+}
+
+void RBDC::setTarget(position target_pos, RBDC_reference reference)
+{
+    if (reference == RBDC_reference::relative) {
+
+        sixtron::position target_transform;
+        target_transform.x =
+                + float(target_pos.x) * cos(_odometry->getTheta())
+                - float(target_pos.y) * sin(_odometry->getTheta())
+                + _odometry->getX();
+        target_transform.y =
+                + float(target_pos.x) * sin(_odometry->getTheta())
+                + float(target_pos.y) * cos(_odometry->getTheta())
+                + _odometry->getY();
+        target_transform.theta =
+                +float(target_pos.theta)
+                + _odometry->getTheta();
+        _target_pos = target_transform;
+
+//        // Transform relative target to global target
+//        sixtron::position robot_base;
+//        sixtron::position target;
+//
+//        // Move to robot base
+//        robot_base.x = (_odometry->getX() * cos(_odometry->getTheta())) - (_odometry->getY() * sin(_odometry->getTheta()));
+//        robot_base.y = (_odometry->getX() * sin(_odometry->getTheta())) + (_odometry->getY() * cos(_odometry->getTheta()));
+//        robot_base.theta = _odometry->getTheta();
+//
+//        // Apply relative move
+//        robot_base.x += float(target_pos.x);
+//        robot_base.y += float(target_pos.y);
+//        robot_base.theta += float(target_pos.theta);
+//
+//        // Move to world base
+//        target.x = (robot_base.x * cos(-robot_base.theta)) - (robot_base.y * sin(-robot_base.theta));
+//        target.y = (robot_base.x * sin(-robot_base.theta)) + (robot_base.y * cos(-robot_base.theta));
+//        target.theta = robot_base.theta; // Always the same theta in 2D position
+
+//        _target_pos = target;
+    } else { // absolute by default
+        _target_pos = target_pos;
+    }
 }
 
 static inline float getDeltaFromTargetTHETA(float target_angle_deg, float current_angle)
@@ -183,6 +229,13 @@ void RBDC::cancel()
     _target_pos.x = _odometry->getX();
     _target_pos.y = _odometry->getY();
     _target_pos.theta = _odometry->getTheta();
+}
+
+void RBDC::pause()
+{
+    if (!_standby) {
+        _standby = true;
+    }
 }
 
 void RBDC::stop()

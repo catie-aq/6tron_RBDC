@@ -25,6 +25,11 @@ typedef enum {
 } RBDC_format;
 
 typedef enum {
+    absolute,
+    relative
+} RBDC_reference;
+
+typedef enum {
     RBDC_standby = 0,
     RBDC_done = 1, // 1.1.1 robot arrive on target
     RBDC_correct_final_angle = 2, // 1.1.2
@@ -58,10 +63,12 @@ class RBDC {
 public:
     RBDC(Odometry *odometry, MotorBase *motor_base, RBDC_params rbdc_parameters);
 
-    void setTarget(position target_pos);
+    void setTarget(float x, float y, float theta, RBDC_reference reference = RBDC_reference::absolute);
+    void setTarget(position target_pos, RBDC_reference reference = RBDC_reference::absolute);
 
     void cancel(); // cancel current target.
 
+    void pause(); // save current goal, wait for next start to continue
     void stop(); // cancel current target and put RBD in standby mode. Need start to wake up.
     void start(); // get out of standby mode.
 

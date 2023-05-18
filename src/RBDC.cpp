@@ -45,39 +45,35 @@ void RBDC::setTarget(position target_pos, RBDC_reference reference)
     if (reference == RBDC_reference::relative) {
 
         sixtron::position target_transform;
-        target_transform.x =
-                + float(target_pos.x) * cos(_odometry->getTheta())
-                - float(target_pos.y) * sin(_odometry->getTheta())
-                + _odometry->getX();
-        target_transform.y =
-                + float(target_pos.x) * sin(_odometry->getTheta())
-                + float(target_pos.y) * cos(_odometry->getTheta())
-                + _odometry->getY();
-        target_transform.theta =
-                +float(target_pos.theta)
-                + _odometry->getTheta();
+        target_transform.x = +float(target_pos.x) * cos(_odometry->getTheta())
+                - float(target_pos.y) * sin(_odometry->getTheta()) + _odometry->getX();
+        target_transform.y = +float(target_pos.x) * sin(_odometry->getTheta())
+                + float(target_pos.y) * cos(_odometry->getTheta()) + _odometry->getY();
+        target_transform.theta = +float(target_pos.theta) + _odometry->getTheta();
         _target_pos = target_transform;
 
-//        // Transform relative target to global target
-//        sixtron::position robot_base;
-//        sixtron::position target;
-//
-//        // Move to robot base
-//        robot_base.x = (_odometry->getX() * cos(_odometry->getTheta())) - (_odometry->getY() * sin(_odometry->getTheta()));
-//        robot_base.y = (_odometry->getX() * sin(_odometry->getTheta())) + (_odometry->getY() * cos(_odometry->getTheta()));
-//        robot_base.theta = _odometry->getTheta();
-//
-//        // Apply relative move
-//        robot_base.x += float(target_pos.x);
-//        robot_base.y += float(target_pos.y);
-//        robot_base.theta += float(target_pos.theta);
-//
-//        // Move to world base
-//        target.x = (robot_base.x * cos(-robot_base.theta)) - (robot_base.y * sin(-robot_base.theta));
-//        target.y = (robot_base.x * sin(-robot_base.theta)) + (robot_base.y * cos(-robot_base.theta));
-//        target.theta = robot_base.theta; // Always the same theta in 2D position
+        //        // Transform relative target to global target
+        //        sixtron::position robot_base;
+        //        sixtron::position target;
+        //
+        //        // Move to robot base
+        //        robot_base.x = (_odometry->getX() * cos(_odometry->getTheta())) -
+        //        (_odometry->getY() * sin(_odometry->getTheta())); robot_base.y =
+        //        (_odometry->getX() * sin(_odometry->getTheta())) + (_odometry->getY() *
+        //        cos(_odometry->getTheta())); robot_base.theta = _odometry->getTheta();
+        //
+        //        // Apply relative move
+        //        robot_base.x += float(target_pos.x);
+        //        robot_base.y += float(target_pos.y);
+        //        robot_base.theta += float(target_pos.theta);
+        //
+        //        // Move to world base
+        //        target.x = (robot_base.x * cos(-robot_base.theta)) - (robot_base.y *
+        //        sin(-robot_base.theta)); target.y = (robot_base.x * sin(-robot_base.theta)) +
+        //        (robot_base.y * cos(-robot_base.theta)); target.theta = robot_base.theta; //
+        //        Always the same theta in 2D position
 
-//        _target_pos = target;
+        //        _target_pos = target;
     } else { // absolute by default
         _target_pos = target_pos;
     }
@@ -261,6 +257,23 @@ void RBDC::updateMotorBase()
 
     _motor_base->setTargetSpeeds(rbdc_cmds);
     _motor_base->update();
+}
+
+void RBDC::setAbsolutePosition(float x, float y, float theta)
+{
+    position absolute_target;
+    absolute_target.x = x;
+    absolute_target.y = y;
+    absolute_target.theta = theta;
+    setAbsolutePosition(absolute_target);
+}
+
+void RBDC::setAbsolutePosition(position absolute_pos)
+{
+    stop();
+    _odometry->setPos(absolute_pos);
+    cancel();
+    start();
 }
 
 } // namespace sixtron

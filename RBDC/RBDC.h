@@ -72,6 +72,9 @@ public:
     void stop(); // cancel current target and put RBD in standby mode. Need start to wake up.
     void start(); // get out of standby mode.
 
+    void setAbsolutePosition(float x, float y, float theta);
+    void setAbsolutePosition(position absolute_pos);
+
     RBDC_status update();
 
 private:

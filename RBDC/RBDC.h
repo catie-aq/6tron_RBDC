@@ -63,7 +63,8 @@ class RBDC {
 public:
     RBDC(Odometry *odometry, MotorBase *motor_base, RBDC_params rbdc_parameters);
 
-    void setTarget(float x, float y, float theta, RBDC_reference reference = RBDC_reference::absolute);
+    void setTarget(
+            float x, float y, float theta, RBDC_reference reference = RBDC_reference::absolute);
     void setTarget(position target_pos, RBDC_reference reference = RBDC_reference::absolute);
 
     void cancel(); // cancel current target.
@@ -72,6 +73,8 @@ public:
     void stop(); // cancel current target and put RBD in standby mode. Need start to wake up.
     void start(); // get out of standby mode.
 
+    int getRunningDirection();
+
     void setAbsolutePosition(float x, float y, float theta);
     void setAbsolutePosition(position absolute_pos);
 
@@ -79,6 +82,7 @@ public:
 
 private:
     bool _standby = false;
+    int _running_direction;
     void updateMotorBase();
 
     Odometry *_odometry;

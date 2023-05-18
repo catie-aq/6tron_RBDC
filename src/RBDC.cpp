@@ -106,6 +106,10 @@ RBDC_status RBDC::update()
         _args_pid_dv.output = 0.0f;
         _args_pid_dtheta.output = 0.0f;
 
+        //reset PIDs
+        _pid_dv.reset();
+        _pid_dtheta.reset();
+
         updateMotorBase();
 
         return RBDC_status::RBDC_standby;
@@ -163,15 +167,15 @@ RBDC_status RBDC::update()
                 (_target_pos.y - _odometry->getY()), (_target_pos.x - _odometry->getX())));
         float delta_angle = getDeltaFromTargetTHETA(target_angle, _odometry->getTheta());
 
-        float running_direction = RBDC_DIR_FORWARD;
+        _running_direction = RBDC_DIR_FORWARD;
         // Check if it is better to go backward or not. Update delta angle accordingly.
         if (_parameters.can_go_backward) {
             if (delta_angle > float(M_PI_2)) {
                 delta_angle -= float(M_PI);
-                running_direction = RBDC_DIR_BACKWARD;
+                _running_direction = RBDC_DIR_BACKWARD;
             } else if (delta_angle < -float(M_PI_2)) {
                 delta_angle += float(M_PI);
-                running_direction = RBDC_DIR_BACKWARD;
+                _running_direction = RBDC_DIR_BACKWARD;
             }
         }
 
@@ -184,7 +188,7 @@ RBDC_status RBDC::update()
         if (abs(delta_angle) < _parameters.moving_theta_precision) {
             // 1.2.1 A : Yes it is.
 
-            error_dv = running_direction * error_dv; // Add direction of moving
+            error_dv = _running_direction * error_dv; // Add direction of moving
 
             // update pid dv
             _args_pid_dv.actual = 0.0f;
@@ -229,9 +233,9 @@ void RBDC::cancel()
 
 void RBDC::pause()
 {
-    if (!_standby) {
+//    if (!_standby) {
         _standby = true;
-    }
+//    }
 }
 
 void RBDC::stop()
@@ -244,9 +248,13 @@ void RBDC::stop()
 
 void RBDC::start()
 {
-    if (_standby) {
+//    if (_standby) {
         _standby = false;
-    }
+//    }
+}
+
+int RBDC::getRunningDirection(){
+    return _running_direction;
 }
 
 void RBDC::updateMotorBase()

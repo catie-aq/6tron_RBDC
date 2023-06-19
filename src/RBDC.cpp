@@ -30,11 +30,32 @@ RBDC::RBDC(Odometry *odometry, MotorBase *motor_base, RBDC_params rbdc_parameter
     _motor_base->init();
 }
 
-void RBDC::setTarget(position target_pos)
+void RBDC::setTarget(float x, float y, float theta, RBDC_reference reference)
 {
+    position target;
+    target.x = x;
+    target.y = y;
+    target.theta = theta;
 
-    // Check and copy new targets values
-    _target_pos = target_pos;
+    setTarget(target, reference);
+}
+
+void RBDC::setTarget(position target_pos, RBDC_reference reference)
+{
+    if (reference == RBDC_reference::relative) {
+
+        // Transform relative target to global target
+        sixtron::position target_transform;
+        target_transform.x = +float(target_pos.x) * cos(_odometry->getTheta())
+                - float(target_pos.y) * sin(_odometry->getTheta()) + _odometry->getX();
+        target_transform.y = +float(target_pos.x) * sin(_odometry->getTheta())
+                + float(target_pos.y) * cos(_odometry->getTheta()) + _odometry->getY();
+        target_transform.theta = +float(target_pos.theta) + _odometry->getTheta();
+        _target_pos = target_transform;
+
+    } else { // absolute by default
+        _target_pos = target_pos;
+    }
 }
 
 static inline float getDeltaFromTargetTHETA(float target_angle_deg, float current_angle)
@@ -63,6 +84,10 @@ RBDC_status RBDC::update()
 
         _args_pid_dv.output = 0.0f;
         _args_pid_dtheta.output = 0.0f;
+
+        // reset PIDs
+        _pid_dv.reset();
+        _pid_dtheta.reset();
 
         updateMotorBase();
 
@@ -121,15 +146,15 @@ RBDC_status RBDC::update()
                 (_target_pos.y - _odometry->getY()), (_target_pos.x - _odometry->getX())));
         float delta_angle = getDeltaFromTargetTHETA(target_angle, _odometry->getTheta());
 
-        float running_direction = RBDC_DIR_FORWARD;
+        _running_direction = RBDC_DIR_FORWARD;
         // Check if it is better to go backward or not. Update delta angle accordingly.
         if (_parameters.can_go_backward) {
             if (delta_angle > float(M_PI_2)) {
                 delta_angle -= float(M_PI);
-                running_direction = RBDC_DIR_BACKWARD;
+                _running_direction = RBDC_DIR_BACKWARD;
             } else if (delta_angle < -float(M_PI_2)) {
                 delta_angle += float(M_PI);
-                running_direction = RBDC_DIR_BACKWARD;
+                _running_direction = RBDC_DIR_BACKWARD;
             }
         }
 
@@ -142,7 +167,7 @@ RBDC_status RBDC::update()
         if (abs(delta_angle) < _parameters.moving_theta_precision) {
             // 1.2.1 A : Yes it is.
 
-            error_dv = running_direction * error_dv; // Add direction of moving
+            error_dv = _running_direction * error_dv; // Add direction of moving
 
             // update pid dv
             _args_pid_dv.actual = 0.0f;
@@ -185,6 +210,13 @@ void RBDC::cancel()
     _target_pos.theta = _odometry->getTheta();
 }
 
+void RBDC::pause()
+{
+    //    if (!_standby) {
+    _standby = true;
+    //    }
+}
+
 void RBDC::stop()
 {
     if (!_standby) {
@@ -195,9 +227,14 @@ void RBDC::stop()
 
 void RBDC::start()
 {
-    if (_standby) {
-        _standby = false;
-    }
+    //    if (_standby) {
+    _standby = false;
+    //    }
+}
+
+int RBDC::getRunningDirection()
+{
+    return _running_direction;
 }
 
 void RBDC::updateMotorBase()
@@ -208,6 +245,23 @@ void RBDC::updateMotorBase()
 
     _motor_base->setTargetSpeeds(rbdc_cmds);
     _motor_base->update();
+}
+
+void RBDC::setAbsolutePosition(float x, float y, float theta)
+{
+    position absolute_target;
+    absolute_target.x = x;
+    absolute_target.y = y;
+    absolute_target.theta = theta;
+    setAbsolutePosition(absolute_target);
+}
+
+void RBDC::setAbsolutePosition(position absolute_pos)
+{
+    stop();
+    _odometry->setPos(absolute_pos);
+    cancel();
+    start();
 }
 
 } // namespace sixtron

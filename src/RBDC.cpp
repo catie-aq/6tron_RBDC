@@ -75,12 +75,34 @@ void RBDC::setTarget(position target_pos, RBDC_reference reference)
     setTarget(target);
 }
 
+void RBDC::setVector(float x, float y)
+{
+    target_position target;
+    _target_vector.x = x; //* _parameters.dt_seconds;
+    _target_vector.y = y; //* _parameters.dt_seconds;
+    target.pos.x = _target_vector.x;
+    target.pos.y = _target_vector.y;
+    target.correct_final_theta = false;
+    target.is_a_vector = true;
+    target.ref = RBDC_reference::relative;
+    setTarget(target);
+}
+
+void RBDC::updateTargetFromVector()
+{
+
+    _target_pos.pos.x = _target_vector.x;
+    _target_pos.pos.y = _target_vector.y;
+    _target_pos.pos.theta = 0.0f;
+    setTarget(_target_pos);
+}
+
 void RBDC::setTarget(target_position rbdc_target_pos)
 {
 
     if (rbdc_target_pos.ref == RBDC_reference::relative) {
 
-        // Transform relative target to global target
+        // Transform relative target to global target from curent position
         sixtron::position target_transform;
         target_transform.x = +float(rbdc_target_pos.pos.x) * cos(_odometry->getTheta())
                 - float(rbdc_target_pos.pos.y) * sin(_odometry->getTheta()) + _odometry->getX();
@@ -114,6 +136,13 @@ RBDC_status RBDC::update()
         updateMotorBase();
 
         return RBDC_status::RBDC_standby;
+    }
+
+    // ======= Vector check ================
+
+    if (_target_pos.is_a_vector) {
+        // Add the vector to current position (in relative reference)
+        updateTargetFromVector();
     }
 
     // =========== Run RBDC =================
@@ -289,6 +318,11 @@ void RBDC::setAbsolutePosition(position absolute_pos)
     _odometry->setPos(absolute_pos);
     cancel();
     start();
+}
+
+target_position RBDC::getTarget()
+{
+    return _target_pos;
 }
 
 } // namespace sixtron

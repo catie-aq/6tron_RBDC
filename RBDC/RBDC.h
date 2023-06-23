@@ -81,6 +81,7 @@ public:
             float x, float y, float theta, RBDC_reference reference = RBDC_reference::absolute);
     void setTarget(position target_pos, RBDC_reference reference = RBDC_reference::absolute);
     void setTarget(target_position rbdc_target_pos);
+    void setVector(float x, float y);
 
     void cancel(); // cancel current target.
 
@@ -95,16 +96,20 @@ public:
 
     RBDC_status update();
 
+    target_position getTarget();
+
 private:
     bool _standby = false;
     int _running_direction;
     void updateMotorBase();
+    void updateTargetFromVector();
 
     Odometry *_odometry;
     MotorBase *_motor_base;
 
     RBDC_params _parameters;
     target_position _target_pos;
+    position _target_vector;
     PID _pid_dv, _pid_dtheta;
     PID_args _args_pid_dv, _args_pid_dtheta;
     bool _dv_zone_reached = false;

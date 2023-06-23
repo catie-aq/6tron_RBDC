@@ -39,6 +39,19 @@ typedef enum {
 } RBDC_status;
 
 /*!
+ *  \struct target_position
+ *  RBDC target position
+ */
+typedef struct target_position target_position;
+
+struct target_position {
+    position pos;
+    RBDC_reference ref = RBDC_reference::absolute;
+    bool correct_final_theta = true;
+    bool is_a_vector = false;
+};
+
+/*!
  *  \struct RBDC_param
  *  PID parameters structure
  */
@@ -63,9 +76,11 @@ class RBDC {
 public:
     RBDC(Odometry *odometry, MotorBase *motor_base, RBDC_params rbdc_parameters);
 
+    void setTarget(float x, float y, RBDC_reference reference = RBDC_reference::absolute);
     void setTarget(
             float x, float y, float theta, RBDC_reference reference = RBDC_reference::absolute);
     void setTarget(position target_pos, RBDC_reference reference = RBDC_reference::absolute);
+    void setTarget(target_position rbdc_target_pos);
 
     void cancel(); // cancel current target.
 
@@ -89,7 +104,7 @@ private:
     MotorBase *_motor_base;
 
     RBDC_params _parameters;
-    position _target_pos;
+    target_position _target_pos;
     PID _pid_dv, _pid_dtheta;
     PID_args _args_pid_dv, _args_pid_dtheta;
     bool _dv_zone_reached = false;

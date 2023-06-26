@@ -30,34 +30,6 @@ RBDC::RBDC(Odometry *odometry, MotorBase *motor_base, RBDC_params rbdc_parameter
     _motor_base->init();
 }
 
-void RBDC::setTarget(float x, float y, float theta, RBDC_reference reference)
-{
-    position target;
-    target.x = x;
-    target.y = y;
-    target.theta = theta;
-
-    setTarget(target, reference);
-}
-
-void RBDC::setTarget(position target_pos, RBDC_reference reference)
-{
-    if (reference == RBDC_reference::relative) {
-
-        // Transform relative target to global target
-        sixtron::position target_transform;
-        target_transform.x = +float(target_pos.x) * cos(_odometry->getTheta())
-                - float(target_pos.y) * sin(_odometry->getTheta()) + _odometry->getX();
-        target_transform.y = +float(target_pos.x) * sin(_odometry->getTheta())
-                + float(target_pos.y) * cos(_odometry->getTheta()) + _odometry->getY();
-        target_transform.theta = +float(target_pos.theta) + _odometry->getTheta();
-        _target_pos = target_transform;
-
-    } else { // absolute by default
-        _target_pos = target_pos;
-    }
-}
-
 static inline float getDeltaFromTargetTHETA(float target_angle_deg, float current_angle)
 {
 
@@ -70,6 +42,78 @@ static inline float getDeltaFromTargetTHETA(float target_angle_deg, float curren
     }
 
     return delta;
+}
+
+void RBDC::setTarget(float x, float y, RBDC_reference reference)
+{
+    target_position target;
+    target.pos.x = x;
+    target.pos.y = y;
+    target.correct_final_theta = false;
+    target.ref = reference;
+
+    setTarget(target);
+}
+
+void RBDC::setTarget(float x, float y, float theta, RBDC_reference reference)
+{
+    target_position target;
+    target.pos.x = x;
+    target.pos.y = y;
+    target.pos.theta = theta;
+    target.ref = reference;
+
+    setTarget(target);
+}
+
+void RBDC::setTarget(position target_pos, RBDC_reference reference)
+{
+    target_position target;
+    target.pos = target_pos;
+    target.ref = reference;
+
+    setTarget(target);
+}
+
+void RBDC::setVector(float x, float y)
+{
+    target_position target;
+    _target_vector.x = x; //* _parameters.dt_seconds;
+    _target_vector.y = y; //* _parameters.dt_seconds;
+    target.pos.x = _target_vector.x;
+    target.pos.y = _target_vector.y;
+    target.correct_final_theta = false;
+    target.is_a_vector = true;
+    target.ref = RBDC_reference::relative;
+    setTarget(target);
+}
+
+void RBDC::updateTargetFromVector()
+{
+
+    _target_pos.pos.x = _target_vector.x;
+    _target_pos.pos.y = _target_vector.y;
+    _target_pos.pos.theta = 0.0f;
+    setTarget(_target_pos);
+}
+
+void RBDC::setTarget(target_position rbdc_target_pos)
+{
+
+    if (rbdc_target_pos.ref == RBDC_reference::relative) {
+
+        // Transform relative target to global target from curent position
+        sixtron::position target_transform;
+        target_transform.x = +float(rbdc_target_pos.pos.x) * cos(_odometry->getTheta())
+                - float(rbdc_target_pos.pos.y) * sin(_odometry->getTheta()) + _odometry->getX();
+        target_transform.y = +float(rbdc_target_pos.pos.x) * sin(_odometry->getTheta())
+                + float(rbdc_target_pos.pos.y) * cos(_odometry->getTheta()) + _odometry->getY();
+        target_transform.theta = +float(rbdc_target_pos.pos.theta) + _odometry->getTheta();
+        rbdc_target_pos.pos = target_transform;
+    }
+
+    // update target pos
+    _target_pos = rbdc_target_pos;
 }
 
 RBDC_status RBDC::update()
@@ -94,10 +138,17 @@ RBDC_status RBDC::update()
         return RBDC_status::RBDC_standby;
     }
 
+    // ======= Vector check ================
+
+    if (_target_pos.is_a_vector) {
+        // Add the vector to current position (in relative reference)
+        updateTargetFromVector();
+    }
+
     // =========== Run RBDC =================
     RBDC_status rbdc_end_status;
-    float e_x = _target_pos.x - _odometry->getX();
-    float e_y = _target_pos.y - _odometry->getY();
+    float e_x = _target_pos.pos.x - _odometry->getX();
+    float e_y = _target_pos.pos.y - _odometry->getY();
     float error_dv = sqrtf((e_x * e_x) + (e_y * e_y));
 
     // 1 Q : Is robot inside the target zone ?
@@ -113,24 +164,31 @@ RBDC_status RBDC::update()
         if (_dv_zone_reached) {
             // Be sure that dv is shutdown
             _args_pid_dv.output = 0.0f;
-            // Compute the final angle
-            float delta_angle = getDeltaFromTargetTHETA(_target_pos.theta, _odometry->getTheta());
 
-            // 1.1 Q : Is target angle (or final angle) correct ?
-            if (abs(delta_angle) < _parameters.final_theta_precision) {
-                // 1.1.1 A : Yes it is. The robot base is in target position.
-                _args_pid_dtheta.output
-                        = 0.0f; // be sure to stop correcting dtheta, as precision is reached.
-                rbdc_end_status = RBDC_status::RBDC_done;
+            if (_target_pos.correct_final_theta) {
+                // Compute the final angle
+                float delta_angle
+                        = getDeltaFromTargetTHETA(_target_pos.pos.theta, _odometry->getTheta());
+
+                // 1.1 Q : Is target angle (or final angle) correct ?
+                if (abs(delta_angle) < _parameters.final_theta_precision) {
+                    // 1.1.1 A : Yes it is. The robot base is in target position.
+                    _args_pid_dtheta.output
+                            = 0.0f; // be sure to stop correcting dtheta, as precision is reached.
+                    rbdc_end_status = RBDC_status::RBDC_done;
+                } else {
+                    // 1.1.2 A : No it is not.
+
+                    // then update pid theta
+                    _args_pid_dtheta.actual = 0.0f;
+                    _args_pid_dtheta.target = delta_angle;
+                    _pid_dtheta.compute(&_args_pid_dtheta);
+
+                    rbdc_end_status = RBDC_status::RBDC_correct_final_angle;
+                }
             } else {
-                // 1.1.2 A : No it is not.
-
-                // then update pid theta
-                _args_pid_dtheta.actual = 0.0f;
-                _args_pid_dtheta.target = delta_angle;
-                _pid_dtheta.compute(&_args_pid_dtheta);
-
-                rbdc_end_status = RBDC_status::RBDC_correct_final_angle;
+                _args_pid_dtheta.output = 0.0f;
+                rbdc_end_status = RBDC_status::RBDC_done;
             }
         }
 
@@ -143,7 +201,7 @@ RBDC_status RBDC::update()
 
         // Compute the angle error based on target X/Y
         float target_angle = (atan2f(
-                (_target_pos.y - _odometry->getY()), (_target_pos.x - _odometry->getX())));
+                (_target_pos.pos.y - _odometry->getY()), (_target_pos.pos.x - _odometry->getX())));
         float delta_angle = getDeltaFromTargetTHETA(target_angle, _odometry->getTheta());
 
         _running_direction = RBDC_DIR_FORWARD;
@@ -164,7 +222,8 @@ RBDC_status RBDC::update()
         _pid_dtheta.compute(&_args_pid_dtheta);
 
         // 1.2 Q : Is the base align with the target position (angle thinking) ?
-        if (abs(delta_angle) < _parameters.moving_theta_precision) {
+        // Or shunt this question if target is a vector.
+        if ((abs(delta_angle) < _parameters.moving_theta_precision) || _target_pos.is_a_vector) {
             // 1.2.1 A : Yes it is.
 
             error_dv = _running_direction * error_dv; // Add direction of moving
@@ -205,16 +264,16 @@ RBDC_status RBDC::update()
 
 void RBDC::cancel()
 {
-    _target_pos.x = _odometry->getX();
-    _target_pos.y = _odometry->getY();
-    _target_pos.theta = _odometry->getTheta();
+    _target_pos.pos.x = _odometry->getX();
+    _target_pos.pos.y = _odometry->getY();
+    _target_pos.pos.theta = _odometry->getTheta();
+    _target_pos.correct_final_theta = true;
+    _target_pos.is_a_vector = false;
 }
 
 void RBDC::pause()
 {
-    //    if (!_standby) {
     _standby = true;
-    //    }
 }
 
 void RBDC::stop()
@@ -227,9 +286,7 @@ void RBDC::stop()
 
 void RBDC::start()
 {
-    //    if (_standby) {
     _standby = false;
-    //    }
 }
 
 int RBDC::getRunningDirection()
@@ -262,6 +319,11 @@ void RBDC::setAbsolutePosition(position absolute_pos)
     _odometry->setPos(absolute_pos);
     cancel();
     start();
+}
+
+target_position RBDC::getTarget()
+{
+    return _target_pos;
 }
 
 } // namespace sixtron

@@ -222,7 +222,8 @@ RBDC_status RBDC::update()
         _pid_dtheta.compute(&_args_pid_dtheta);
 
         // 1.2 Q : Is the base align with the target position (angle thinking) ?
-        if (abs(delta_angle) < _parameters.moving_theta_precision) {
+        // Or shunt this question if target is a vector.
+        if ((abs(delta_angle) < _parameters.moving_theta_precision) || _target_pos.is_a_vector) {
             // 1.2.1 A : Yes it is.
 
             error_dv = _running_direction * error_dv; // Add direction of moving

@@ -163,6 +163,7 @@ RBDC_status RBDC::update()
         // Correct angle ONLY if inside target zone AND dv zone already reached
         if (_dv_zone_reached) {
             // Be sure that dv is shutdown
+            _pid_dv.reset();
             _args_pid_dv.output = 0.0f;
 
             if (_target_pos.correct_final_theta) {
@@ -184,6 +185,7 @@ RBDC_status RBDC::update()
                     rbdc_end_status = RBDC_status::RBDC_correct_final_angle;
                 }
             } else {
+                _pid_dtheta.reset();
                 _args_pid_dtheta.output = 0.0f;
                 rbdc_end_status = RBDC_status::RBDC_done;
             }

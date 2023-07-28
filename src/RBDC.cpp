@@ -170,20 +170,17 @@ RBDC_status RBDC::update()
                 float delta_angle
                         = getDeltaFromTargetTHETA(_target_pos.pos.theta, _odometry->getTheta());
 
+                // update pid theta
+                _args_pid_dtheta.actual = 0.0f;
+                _args_pid_dtheta.target = delta_angle;
+                _pid_dtheta.compute(&_args_pid_dtheta);
+
                 // 1.1 Q : Is target angle (or final angle) correct ?
                 if (abs(delta_angle) < _parameters.final_theta_precision) {
                     // 1.1.1 A : Yes it is. The robot base is in target position.
-                    _args_pid_dtheta.output
-                            = 0.0f; // be sure to stop correcting dtheta, as precision is reached.
                     rbdc_end_status = RBDC_status::RBDC_done;
                 } else {
                     // 1.1.2 A : No it is not.
-
-                    // then update pid theta
-                    _args_pid_dtheta.actual = 0.0f;
-                    _args_pid_dtheta.target = delta_angle;
-                    _pid_dtheta.compute(&_args_pid_dtheta);
-
                     rbdc_end_status = RBDC_status::RBDC_correct_final_angle;
                 }
             } else {

@@ -149,7 +149,8 @@ RBDC_status RBDC::update()
     RBDC_status rbdc_end_status;
     float e_x = _target_pos.pos.x - _odometry->getX();
     float e_y = _target_pos.pos.y - _odometry->getY();
-    float error_dv = sqrtf((e_x * e_x) + (e_y * e_y));
+    float error_dv = sqrtf((e_x * e_x)
+            + (e_y * e_y)); // for ARM, option "-ffast-math" for floating-point optimizations
 
     // 1 Q : Is robot inside the target zone ?
     if ((error_dv < _parameters.target_precision) && (error_dv > -_parameters.target_precision)) {

@@ -109,6 +109,7 @@ private:
 
     RBDC_params _parameters;
     target_position _target_pos;
+    float _arrived_theta;
     position _target_vector;
     PID _pid_dv, _pid_dtheta;
     PID_args _args_pid_dv, _args_pid_dtheta;

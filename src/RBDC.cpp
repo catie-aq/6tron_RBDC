@@ -10,7 +10,6 @@ RBDC::RBDC(Odometry *odometry, MotorBase *motor_base, RBDC_params rbdc_parameter
         _odometry(odometry),
         _motor_base(motor_base),
         _parameters(rbdc_parameters),
-        _arrived_theta(0.0f),
         _pid_dv(rbdc_parameters.pid_param_dv, rbdc_parameters.dt_seconds),
         _pid_dtheta(rbdc_parameters.pid_param_dteta, rbdc_parameters.dt_seconds)
 {
@@ -142,7 +141,7 @@ RBDC_status RBDC::update()
     // ======= Vector check ================
 
     if (_target_pos.is_a_vector) {
-        // Add the vector to current position (in relative reference)
+        // Add the vector tomr oizo current position (in relative reference)
         updateTargetFromVector();
     }
 
@@ -171,6 +170,7 @@ RBDC_status RBDC::update()
             // Be sure that dv is shutdown
             _pid_dv.reset();
             _args_pid_dv.output = 0.0f;
+            _first_move = true; // reset first move for next target update
 
             float delta_angle;
             if (_target_pos.correct_final_theta) {
@@ -225,9 +225,19 @@ RBDC_status RBDC::update()
         _args_pid_dtheta.target = delta_angle;
         _pid_dtheta.compute(&_args_pid_dtheta);
 
-        // 1.2 Q : Is the base align with the target position (angle thinking) ?
-        // Or shunt this question if target is a vector.
-        if ((abs(delta_angle) < _parameters.moving_theta_precision) || _target_pos.is_a_vector) {
+        if (_first_move) {
+            // 1.2.2.2 A
+            // if it is the first move, use a more accurate position instead of
+            // moving_theta_precision
+            if ((abs(delta_angle) < _parameters.final_theta_precision) || _target_pos.is_a_vector) {
+                _first_move = false;
+            }
+            rbdc_end_status = RBDC_status::RBDC_correct_initial_angle;
+
+            // 1.2 Q : Is the base align with the target position (angle thinking) ?
+            // Or shunt this question if target is a vector.
+        } else if ((abs(delta_angle) < _parameters.moving_theta_precision)
+                || _target_pos.is_a_vector) {
             // 1.2.1 A : Yes it is.
 
             error_dv = _running_direction * error_dv; // Add direction of moving
@@ -241,22 +251,15 @@ RBDC_status RBDC::update()
 
         } else {
             // 1.2.2 A : No it isn't. Angle must be corrected.
+            // 1.2.2.1 A. The Base is probably already moving to the target
+            // position. But, the PID Theta can't keep up (maybe output PWM are already at max)
+            // So we need to reduce the speed, in order for the angle to be corrected correctly.
 
-            // 1.2.2 Q : Is the robot already moving ?
-            if (_args_pid_dv.output == 0.0f) {
-                // 1.2.2.2 A : No it is not. Must be the first angle.
-                rbdc_end_status = RBDC_status::RBDC_correct_initial_angle;
-            } else {
-                // 1.2.2.1 A : Yes it is. The Base is probably already moving to the target
-                // position. But, the PID Theta can't keep up (maybe output PWM are already at max)
-                // So we need to reduce the speed, in order for the angle to be corrected correctly.
+            _args_pid_dv.output = _args_pid_dv.output
+                    * _parameters.dv_reducing_coefficient; // reduce by given coefficient,
+                                                           // only one time
 
-                _args_pid_dv.output = _args_pid_dv.output
-                        * _parameters.dv_reducing_coefficient; // reduce by given coefficient,
-                                                               // only one time
-
-                rbdc_end_status = RBDC_status::RBDC_moving_and_correct_angle;
-            }
+            rbdc_end_status = RBDC_status::RBDC_moving_and_correct_angle;
         }
     }
 

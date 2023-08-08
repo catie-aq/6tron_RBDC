@@ -112,11 +112,13 @@ private:
 
     RBDC_params _parameters;
     target_position _target_pos;
-    float _arrived_theta;
     position _target_vector;
     PID _pid_dv, _pid_dtheta;
     PID_args _args_pid_dv, _args_pid_dtheta;
+
+    float _arrived_theta = 0.0f;
     bool _dv_zone_reached = false;
+    bool _first_move = true;
 };
 
 } // namespace sixtron

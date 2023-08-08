@@ -18,6 +18,8 @@ namespace sixtron {
 #define RBDC_DIR_FORWARD (1)
 #define RBDC_DIR_BACKWARD (-1)
 
+#define RBDC_MAX_STATUS 7
+
 typedef enum {
     two_wheels_robot,
     three_wheels_robot,
@@ -31,11 +33,12 @@ typedef enum {
 
 typedef enum {
     RBDC_standby = 0,
-    RBDC_done = 1, // 1.1.1 robot arrive on target
-    RBDC_correct_final_angle = 2, // 1.1.2
-    RBDC_moving = 3, // 1.2.1
-    RBDC_moving_and_correct_angle = 4, // 1.2.2.1
-    RBDC_correct_initial_angle = 5, // 1.2.2.2
+    RBDC_working = 1, // This should never happen, as we cover all the cases at each iteration.
+    RBDC_done = 2, // 1.1.1 robot arrive on target
+    RBDC_correct_final_angle = 3, // 1.1.2
+    RBDC_moving = 4, // 1.2.1
+    RBDC_moving_and_correct_angle = 5, // 1.2.2.1
+    RBDC_correct_initial_angle = 6, // 1.2.2.2
 } RBDC_status;
 
 /*!

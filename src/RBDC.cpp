@@ -147,7 +147,7 @@ RBDC_status RBDC::update()
     }
 
     // =========== Run RBDC =================
-    RBDC_status rbdc_end_status;
+    RBDC_status rbdc_end_status = RBDC_status::RBDC_working;
     float e_x = _target_pos.pos.x - _odometry->getX();
     float e_y = _target_pos.pos.y - _odometry->getY();
     float error_dv = sqrtf((e_x * e_x)

@@ -70,9 +70,10 @@ typedef struct RBDC_params RBDC_params;
 
 struct RBDC_params {
     RBDC_format rbdc_format = two_wheels_robot;
-    PID_params pid_param_dv, pid_param_dteta;
+    PID_params pid_param_dv, pid_param_dteta, pid_param_dtan;
     float max_output_dtheta = 1.0f; // max command output, eg -1.0f to +1.0f
     float max_output_dv = 1.0f;
+    float max_output_dtan = 1.0f;
     float final_theta_precision = 0.0f;
     float moving_theta_precision = 0.0f;
     float target_precision = 0.5f; // must be greater than dv_precision
@@ -110,6 +111,7 @@ public:
     target_position getTarget();
 
 private:
+    target_speeds _rbdc_cmds;
     bool _standby = false;
     int _running_direction;
     void updateMobileBase();
@@ -121,8 +123,8 @@ private:
     RBDC_params _parameters;
     target_position _target_pos;
     position _target_vector;
-    PID _pid_dv, _pid_dtheta;
-    PID_args _args_pid_dv, _args_pid_dtheta;
+    PID _pid_dv, _pid_dtheta, _pid_dtan;
+    PID_args _args_pid_dv, _args_pid_dtheta, _args_pid_dtan;
 
     float _arrived_theta = 0.0f;
     bool _dv_zone_reached = false;

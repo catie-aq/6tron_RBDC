@@ -291,8 +291,9 @@ RBDC_status RBDC::update()
         }
     }
 
+
     else if (_parameters.rbdc_format == three_wheels_robot) {
-        // condition to consider target reached
+        //condition to consider target reached
         if ((fabsf(e_x_global) < _parameters.dv_precision)
                 && (fabsf(e_y_global) < _parameters.dv_precision)
                 && (fabsf(e_theta_global) < _parameters.final_theta_precision)) {
@@ -313,7 +314,8 @@ RBDC_status RBDC::update()
         _args_pid_dtheta.actual = 0;
         _args_pid_dtheta.target = e_theta_global;
 
-        // computes the commands for the base in the global referential
+
+        //computes the commands for the base in the global referential
         _pid_dv.compute(&_args_pid_dv);
         _pid_dtan.compute(&_args_pid_dtan);
         _pid_dtheta.compute(&_args_pid_dtheta);

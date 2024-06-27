@@ -28,6 +28,7 @@ RBDC::RBDC(Odometry *odometry, MobileBase *mobile_base, RBDC_params rbdc_paramet
         _parameters.dv_precision = _parameters.target_precision;
     }
 
+    //initializaion
     _odometry->init();
     _mobile_base->init();
 }
@@ -150,6 +151,7 @@ RBDC_status RBDC::update()
     // =========== Run RBDC =================
     RBDC_status rbdc_end_status = RBDC_status::RBDC_working;
 
+    //defines the remaining distance to target in the global referential
     float e_x_global = _target_pos.pos.x - _odometry->getX();
     float e_y_global = _target_pos.pos.y - _odometry->getY();
     float e_theta_global = _target_pos.pos.theta - _odometry->getTheta();
@@ -274,12 +276,15 @@ RBDC_status RBDC::update()
         }
     }
 
-    else if (_parameters.rbdc_format == three_wheels_robot) {
 
+    else if (_parameters.rbdc_format == three_wheels_robot) {
+        //condition to consider target reached
         if ((fabsf(e_x_global) < _parameters.dv_precision) && (fabsf(e_y_global) < _parameters.dv_precision)
                 && (fabsf(e_theta_global) < _parameters.final_theta_precision)) {
             rbdc_end_status = RBDC_status::RBDC_done;
-        } else {
+        }
+
+        else {
             rbdc_end_status = RBDC_status::RBDC_moving;
         }
 
@@ -295,11 +300,12 @@ RBDC_status RBDC::update()
         _args_pid_dtheta.target = e_theta_global;
 
 
-
+        //computes the commands for the base in the global referential
         _pid_dv.compute(&_args_pid_dv);
         _pid_dtan.compute(&_args_pid_dtan);
         _pid_dtheta.compute(&_args_pid_dtheta);
 
+        //translate the outputs from the position Pids into commands in the base referential for the motor Pids
         _rbdc_cmds.cmd_lin = cosf(_odometry->getTheta()) * _args_pid_dv.output + sinf(_odometry->getTheta()) * _args_pid_dtan.output;
         _rbdc_cmds.cmd_tan = -sinf(_odometry->getTheta()) * _args_pid_dv.output + cosf(_odometry->getTheta()) * _args_pid_dtan.output;
         _rbdc_cmds.cmd_rot = _args_pid_dtheta.output;

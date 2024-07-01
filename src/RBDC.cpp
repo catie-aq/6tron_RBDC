@@ -130,11 +130,17 @@ RBDC_status RBDC::update()
     if (_standby) {
 
         _args_pid_dv.output = 0.0f;
+        _args_pid_dtan.output=0.0f;
         _args_pid_dtheta.output = 0.0f;
 
         // reset PIDs
         _pid_dv.reset();
+        _pid_dtan.reset();
         _pid_dtheta.reset();
+
+        _rbdc_cmds.cmd_lin = 0.0f;
+        _rbdc_cmds.cmd_tan = 0.0f;
+        _rbdc_cmds.cmd_rot = 0.0f;
 
         updateMobileBase();
 

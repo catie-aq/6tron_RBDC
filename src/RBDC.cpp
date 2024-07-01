@@ -365,6 +365,7 @@ void RBDC::updateMobileBase()
 //    rbdc_cmds.cmd_tan = _args_pid_dtan.output;
 
     _mobile_base->setTargetSpeeds(_rbdc_cmds);
+    _standby == true ? (_mobile_base->stop()) : (_mobile_base->start());
     _mobile_base->update();
 }
 

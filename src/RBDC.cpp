@@ -365,6 +365,7 @@ void RBDC::updateMotorBase()
 //    rbdc_cmds.cmd_tan = _args_pid_dtan.output;
 
     _motor_base->setTargetSpeeds(_rbdc_cmds);
+    _standby == true ? (_motor_base->stop()) : (_motor_base->start());
     _motor_base->update();
 }
 

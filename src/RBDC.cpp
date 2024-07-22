@@ -160,7 +160,16 @@ RBDC_status RBDC::update()
     //defines the remaining distance to target in the global referential
     float e_x_global = _target_pos.pos.x - _odometry->getX();
     float e_y_global = _target_pos.pos.y - _odometry->getY();
-    float e_theta_global = _target_pos.pos.theta - _odometry->getTheta();
+    float e_theta_global;
+    _target_pos.absolute_angle ? e_theta_global = fmod(_target_pos.pos.theta - _odometry->getTheta(), 2.0f*float(M_PI))
+                               : e_theta_global = _target_pos.pos.theta - _odometry->getTheta();
+
+    if (_target_pos.shortest_angle)
+    {
+        _target_pos.absolute_angle = true;
+        e_theta_global < float(M_PI) ?  e_theta_global = e_theta_global
+                                     :  e_theta_global = 2.0f * float(M_PI) - e_theta_global ;
+    }
 
     if (_parameters.rbdc_format == two_wheels_robot) {
 

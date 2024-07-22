@@ -64,6 +64,18 @@ struct target_position {
     bool shortest_angle = true;
 };
 
+typedef struct trapeze trapeze;
+
+struct trapeze {
+    float V_max = 0.5f; //s
+    float T_ramp = 10;//0.625f; //s
+    float acc_max = V_max/T_ramp;
+    float T_plat;
+    float T_elapsed;
+
+};
+
+
 /*!
  *  \struct RBDC_param
  *  PID parameters structure
@@ -96,6 +108,8 @@ public:
     void setTarget(position target_pos, RBDC_reference reference = RBDC_reference::absolute);
     void setTarget(target_position rbdc_target_pos);
     void setVector(float x, float y);
+    void trapeze_init(float X, float Y, float Theta);
+    void trapeze_calcul();
 
     void cancel(); // cancel current target.
 
@@ -124,6 +138,7 @@ private:
 
     RBDC_params _parameters;
     target_position _target_pos;
+    trapeze _trapeze_x, _trapeze_y, _trapeze_theta;
     position _target_vector;
     PID _pid_dv, _pid_dtheta, _pid_dtan;
     PID_args _args_pid_dv, _args_pid_dtheta, _args_pid_dtan;

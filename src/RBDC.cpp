@@ -57,6 +57,7 @@ void RBDC::setTarget(float x, float y, RBDC_reference reference)
     target.ref = reference;
 
     setTarget(target);
+
 }
 
 void RBDC::setTarget(float x, float y, float theta, RBDC_reference reference)
@@ -77,6 +78,45 @@ void RBDC::setTarget(position target_pos, RBDC_reference reference)
     target.ref = reference;
 
     setTarget(target);
+}
+
+void RBDC::trapeze_init(float X, float Y, float Theta)
+{
+//    _trapeze_x.V_max = Vx;
+//    _trapeze_y.V_max = Vy;
+//    _trapeze_theta.V_max = Vtheta;
+
+    _trapeze_x.T_elapsed     = 0.0f;
+    _trapeze_y.T_elapsed     = 0.0f;
+    _trapeze_theta.T_elapsed = 0.0f;
+
+    _trapeze_x.T_plat = X / _trapeze_x.V_max - _trapeze_x.T_ramp;
+    _trapeze_y.T_plat = Y / _trapeze_y.V_max - _trapeze_y.T_ramp;
+    _trapeze_theta.T_plat = Theta / _trapeze_theta.V_max - _trapeze_theta.T_ramp;
+}
+
+    void RBDC::trapeze_calcul()
+{
+    _trapeze_x.T_elapsed += _parameters.dt_seconds;
+    _trapeze_y.T_elapsed += _parameters.dt_seconds;
+    _trapeze_theta.T_elapsed += _parameters.dt_seconds;
+
+    /////////////////////////////////////////////////////////// x trapeze /////////////////////////////////////////////////////////////
+    if (_target_pos.pos.x < _trapeze_x.V_max * _trapeze_x.T_ramp/2.0f) //pente acceleration
+    {
+        _target_pos.pos.x = _trapeze_x.acc_max * (_trapeze_x.T_elapsed * _trapeze_x.T_elapsed);
+    }
+    else if (_target_pos.pos.x > _trapeze_x.V_max * _trapeze_x.T_ramp/2.0f && _target_pos.pos.x < _trapeze_x.V_max * (_trapeze_x.T_ramp/2.0f + _trapeze_x.T_plat)) //v constante
+    {
+        _target_pos.pos.x = _trapeze_x.V_max * (_trapeze_x.T_elapsed - _trapeze_x.T_ramp) + _trapeze_x.V_max * _trapeze_x.T_ramp/2.0f;
+    }
+    else if (_target_pos.pos.x > _trapeze_x.V_max * (_trapeze_x.T_ramp/2.0f + _trapeze_x.T_plat) && _target_pos.pos.x < _trapeze_x.V_max * (_trapeze_x.T_ramp + _trapeze_x.T_plat)) //pente decceleration
+    {
+        _target_pos.pos.x = -_trapeze_x.T_ramp * (_trapeze_x.T_elapsed - _trapeze_x.T_plat -_trapeze_x.T_ramp)*(_trapeze_x.T_elapsed - _trapeze_x.T_plat -_trapeze_x.T_ramp) + _trapeze_x.V_max * (_trapeze_x.T_ramp/2.0f + _trapeze_x.T_plat);
+    }
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//    printf("%7.5f\n",_target_pos.pos.x);
 }
 
 void RBDC::setVector(float x, float y)
@@ -119,6 +159,7 @@ void RBDC::setTarget(target_position rbdc_target_pos)
 
     // update target pos
     _target_pos = rbdc_target_pos;
+    trapeze_init(rbdc_target_pos.pos.x,rbdc_target_pos.pos.y,rbdc_target_pos.pos.theta);
 }
 
 RBDC_status RBDC::update()
@@ -158,6 +199,8 @@ RBDC_status RBDC::update()
 
     // =========== Run RBDC =================
     RBDC_status rbdc_end_status = RBDC_status::RBDC_working;
+
+    trapeze_calcul();
 
     // defines the remaining distance to target in the global referential
     float e_x_global = _target_pos.pos.x - _odometry->getX();

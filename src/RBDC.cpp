@@ -187,7 +187,7 @@ RBDC_status RBDC::update()
             _pid_dtheta.compute(&_args_pid_dtheta);
 
             // 1.1 Q : Is target angle (or final angle) correct ?
-            if (abs(delta_angle) < _parameters.final_theta_precision) {
+            if (fabs(delta_angle) < _parameters.final_theta_precision) {
                 // 1.1.1 A : Yes it is. The robot base is in target position.
                 rbdc_end_status = RBDC_status::RBDC_done;
             } else {
@@ -229,14 +229,14 @@ RBDC_status RBDC::update()
             // 1.2.2.2 A
             // if it is the first move, use a more accurate position instead of
             // moving_theta_precision
-            if ((abs(delta_angle) < _parameters.final_theta_precision) || _target_pos.is_a_vector) {
+            if ((fabs(delta_angle) < _parameters.final_theta_precision) || _target_pos.is_a_vector) {
                 _first_move = false;
             }
             rbdc_end_status = RBDC_status::RBDC_correct_initial_angle;
 
             // 1.2 Q : Is the base align with the target position (angle thinking) ?
             // Or shunt this question if target is a vector.
-        } else if ((abs(delta_angle) < _parameters.moving_theta_precision)
+        } else if ((fabs(delta_angle) < _parameters.moving_theta_precision)
                 || _target_pos.is_a_vector) {
             // 1.2.1 A : Yes it is.
 

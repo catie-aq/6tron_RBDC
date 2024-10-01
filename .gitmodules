@@ -6,7 +6,7 @@
 	path = odometry
 	url = git@github.com:catie-aq/6tron_odometry.git
 	branch = main
-[submodule "motor_base"]
-	path = motor_base
-	url = git@github.com:catie-aq/6tron_motor_base.git
+[submodule "mobile-base"]
+	path = mobile-base
+	url = git@github.com:catie-aq/6tron_mobile-base.git
 	branch = main

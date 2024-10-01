@@ -6,9 +6,9 @@
 
 namespace sixtron {
 
-RBDC::RBDC(Odometry *odometry, MotorBase *motor_base, RBDC_params rbdc_parameters):
+RBDC::RBDC(Odometry *odometry, MobileBase *mobile_base, RBDC_params rbdc_parameters):
         _odometry(odometry),
-        _motor_base(motor_base),
+        _mobile_base(mobile_base),
         _parameters(rbdc_parameters),
         _pid_dv(rbdc_parameters.pid_param_dv, rbdc_parameters.dt_seconds),
         _pid_dtheta(rbdc_parameters.pid_param_dteta, rbdc_parameters.dt_seconds)
@@ -27,7 +27,7 @@ RBDC::RBDC(Odometry *odometry, MotorBase *motor_base, RBDC_params rbdc_parameter
     }
 
     _odometry->init();
-    _motor_base->init();
+    _mobile_base->init();
 }
 
 static inline float getDeltaFromTargetTHETA(float target_angle_deg, float current_angle)
@@ -133,7 +133,7 @@ RBDC_status RBDC::update()
         _pid_dv.reset();
         _pid_dtheta.reset();
 
-        updateMotorBase();
+        updateMobileBase();
 
         return RBDC_status::RBDC_standby;
     }
@@ -264,7 +264,7 @@ RBDC_status RBDC::update()
     }
 
     // ======== Update Motor Base ============
-    updateMotorBase();
+    updateMobileBase();
 
     return rbdc_end_status;
 }
@@ -301,14 +301,14 @@ int RBDC::getRunningDirection()
     return _running_direction;
 }
 
-void RBDC::updateMotorBase()
+void RBDC::updateMobileBase()
 {
     target_speeds rbdc_cmds;
     rbdc_cmds.cmd_rot = _args_pid_dtheta.output;
     rbdc_cmds.cmd_lin = _args_pid_dv.output;
 
-    _motor_base->setTargetSpeeds(rbdc_cmds);
-    _motor_base->update();
+    _mobile_base->setTargetSpeeds(rbdc_cmds);
+    _mobile_base->update();
 }
 
 void RBDC::setAbsolutePosition(float x, float y, float theta)

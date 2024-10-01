@@ -26,7 +26,7 @@ Additionally, the RBDC depends on two other external classes:
 
 * [**Odometry**](https://github.com/catie-aq/6tron_odometry), to get current robot base info (like the actual position measured by sensors)
 
-* [**MotorBase**](https://github.com/catie-aq/6tron_motor_base), to send speeds commands to the base.
+* [**MobileBase**](https://github.com/catie-aq/6tron_mobile-base), to send speeds commands to the base.
 
 Theses two classes are defined as **interfaces**, this means that the user has to define its own child classes for its own application. An example of a custom implementation [can be found here](https://github.com/catie-aq/mbed_RBDC-pokibot-example).
 
@@ -74,7 +74,7 @@ To get the RBDC working correctly, there is some setup to do:
 
 * The Odometry
 
-* The Motor Base
+* The Mobile Base
 
 * The RBDC configuration
 
@@ -90,17 +90,17 @@ An example of a custom application-specific odometry implementation can be found
 
 More info can be found on the [Odometry repository](https://github.com/catie-aq/6tron_odometry).
 
-### Motor Base
+### Mobile Base
 
-The user must create a Motor base class that respect the form and functions used by the RBDC. To do so, [an interface has been made](https://github.com/catie-aq/6tron_motor_base), that forces the user to respect all features needed by the algorithm.
+The user must create a Mobile base class that respect the form and functions used by the RBDC. To do so, [an interface has been made](https://github.com/catie-aq/6tron_mobile-base), that forces the user to respect all features needed by the algorithm.
 
 This class is needed to convert **dV**, **dTheta** and **dTan** speeds from RBDC to the actual motor commands of the robot base.
 
-Again, in the case of a classical two wheels robot, so with only two motors, [a child's class has already been made](https://github.com/catie-aq/6tron_motor_base/blob/main/src/motor_base_two_wheels.cpp) to get the implementation easier for the user.
+Again, in the case of a classical two wheels robot, so with only two motors, [a child's class has already been made](https://github.com/catie-aq/6tron_mobile-base/blob/main/src/mobile_base_differential.cpp) to get the implementation easier for the user.
 
 An example of a custom application-specific odometry implementation can be found in the [Mbed RBDC Pokibot demo repository](https://github.com/catie-aq/mbed_RBDC-pokibot-example).
 
-More info can be found on the [Motor Base repository](https://github.com/catie-aq/6tron_motor_base).
+More info can be found on the [Mobile Base repository](https://github.com/catie-aq/6tron_mobile-base).
 
 ### RBDC configuration
 
@@ -121,14 +121,14 @@ The RBDC requires some parameters to work properly. All possible parameters can 
 
 ### C++ implementation (Pokibot example)
 
-In user implementation, one must first create his own Odometry and MotorBase object in his initialisation code.
+In user implementation, one must first create his own Odometry and MobileBase object in his initialisation code.
 
 ```cpp
     // Create odometry. Will be init by RBDC.
     odom = new sixtron::OdometryPokibot(hz_pid, sensorLeft, sensorRight);
 
-    // Create robot base. This will init all motors as well.  Will be init by RBDC.
-    basePokibot = new sixtron::MotorBasePokibot(dt_pid, sensorLeft, sensorRight);
+    // Create robot mobile base. This will init all motors as well.  Will be init by RBDC.
+    basePokibot = new sixtron::MobileBasePokibot(dt_pid, sensorLeft, sensorRight);
 ```
 
 Then create and set RBDC parameters...

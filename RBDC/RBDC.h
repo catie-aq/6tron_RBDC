@@ -8,7 +8,7 @@
 #include <math.h>
 #include <stdint.h>
 
-#include "motor_base/motor_base.h"
+#include "mobile_base/mobile_base.h"
 #include "odometry/odometry.h"
 #include "pid/pid.h"
 
@@ -85,7 +85,7 @@ struct RBDC_params {
 class RBDC {
 
 public:
-    RBDC(Odometry *odometry, MotorBase *motor_base, RBDC_params rbdc_parameters);
+    RBDC(Odometry *odometry, MobileBase *mobile_base, RBDC_params rbdc_parameters);
 
     void setTarget(float x, float y, RBDC_reference reference = RBDC_reference::absolute);
     void setTarget(
@@ -112,11 +112,11 @@ public:
 private:
     bool _standby = false;
     int _running_direction;
-    void updateMotorBase();
+    void updateMobileBase();
     void updateTargetFromVector();
 
     Odometry *_odometry;
-    MotorBase *_motor_base;
+    MobileBase *_mobile_base;
 
     RBDC_params _parameters;
     target_position _target_pos;

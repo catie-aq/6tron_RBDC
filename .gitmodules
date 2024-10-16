@@ -9,3 +9,6 @@
 [submodule "mobile_base"]
 	path = mobile_base
 	url = https://github.com/catie-aq/6tron_mobile-base
+[submodule "mobile-base"]
+	path = mobile-base
+	url = https://github.com/catie-aq/6tron_mobile-base

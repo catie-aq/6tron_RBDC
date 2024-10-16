@@ -28,11 +28,12 @@ RBDC::RBDC(Odometry *odometry, MobileBase *mobile_base, RBDC_params rbdc_paramet
         _parameters.dv_precision = _parameters.target_precision;
     }
 
-    //initializaion
+    // initialization
     _odometry->init();
     _mobile_base->init();
 }
 
+// this function give the shortest angle between -180° and +180°
 static inline float getDeltaFromTargetTHETA(float target_angle_deg, float current_angle)
 {
 
@@ -88,15 +89,16 @@ void RBDC::setVector(float x, float y)
     target.correct_final_theta = false;
     target.is_a_vector = true;
     target.ref = RBDC_reference::relative;
+
     setTarget(target);
 }
 
 void RBDC::updateTargetFromVector()
 {
-
     _target_pos.pos.x = _target_vector.x;
     _target_pos.pos.y = _target_vector.y;
     _target_pos.pos.theta = 0.0f;
+
     setTarget(_target_pos);
 }
 
@@ -105,7 +107,7 @@ void RBDC::setTarget(target_position rbdc_target_pos)
 
     if (rbdc_target_pos.ref == RBDC_reference::relative) {
 
-        // Transform relative target to global target from curent position
+        // Transform relative target to global target from current position
         sixtron::position target_transform;
         target_transform.x = +float(rbdc_target_pos.pos.x) * cos(_odometry->getTheta())
                 - float(rbdc_target_pos.pos.y) * sin(_odometry->getTheta()) + _odometry->getX();
@@ -130,7 +132,7 @@ RBDC_status RBDC::update()
     if (_standby) {
 
         _args_pid_dv.output = 0.0f;
-        _args_pid_dtan.output=0.0f;
+        _args_pid_dtan.output = 0.0f;
         _args_pid_dtheta.output = 0.0f;
 
         // reset PIDs
@@ -150,31 +152,29 @@ RBDC_status RBDC::update()
     // ======= Vector check ================
 
     if (_target_pos.is_a_vector) {
-        // Add the vector tomr oizo current position (in relative reference)
+        // Add the vector to current position (in relative reference)
         updateTargetFromVector();
     }
 
     // =========== Run RBDC =================
     RBDC_status rbdc_end_status = RBDC_status::RBDC_working;
 
-    //defines the remaining distance to target in the global referential
+    // defines the remaining distance to target in the global referential
     float e_x_global = _target_pos.pos.x - _odometry->getX();
     float e_y_global = _target_pos.pos.y - _odometry->getY();
-    float e_theta_global;
-    _target_pos.absolute_angle ? e_theta_global = fmod(_target_pos.pos.theta - _odometry->getTheta(), 2.0f*float(M_PI))
-                               : e_theta_global = _target_pos.pos.theta - _odometry->getTheta();
+    float e_theta_global = _target_pos.pos.theta - _odometry->getTheta();
 
-    if (_target_pos.shortest_angle)
-    {
-        _target_pos.absolute_angle = true;
-        e_theta_global < float(M_PI) ?  e_theta_global = e_theta_global
-                                     :  e_theta_global = 2.0f * float(M_PI) - e_theta_global ;
+    if (_target_pos.shortest_angle) {
+        e_theta_global = getDeltaFromTargetTHETA(_target_pos.pos.theta, _odometry->getTheta());
+    } else if (_target_pos.absolute_angle){
+        e_theta_global = fmod(_target_pos.pos.theta - _odometry->getTheta(), 2.0f * float(M_PI));
     }
 
     if (_parameters.rbdc_format == two_wheels_robot) {
 
         float error_dv = sqrtf((e_x_global * e_x_global)
-                + (e_y_global * e_y_global)); // for ARM, option "-ffast-math" for floating-point optimizations
+                + (e_y_global * e_y_global)); // for ARM, option "-ffast-math" for floating-point
+                                              // optimizations
 
         // 1 Q : Is robot inside the target zone ?
         if ((error_dv < _parameters.target_precision)
@@ -291,10 +291,10 @@ RBDC_status RBDC::update()
         }
     }
 
-
     else if (_parameters.rbdc_format == three_wheels_robot) {
-        //condition to consider target reached
-        if ((fabsf(e_x_global) < _parameters.dv_precision) && (fabsf(e_y_global) < _parameters.dv_precision)
+        // condition to consider target reached
+        if ((fabsf(e_x_global) < _parameters.dv_precision)
+                && (fabsf(e_y_global) < _parameters.dv_precision)
                 && (fabsf(e_theta_global) < _parameters.final_theta_precision)) {
             rbdc_end_status = RBDC_status::RBDC_done;
         }
@@ -302,7 +302,6 @@ RBDC_status RBDC::update()
         else {
             rbdc_end_status = RBDC_status::RBDC_moving;
         }
-
 
         // UPDATE
         _args_pid_dv.actual = 0;
@@ -314,18 +313,18 @@ RBDC_status RBDC::update()
         _args_pid_dtheta.actual = 0;
         _args_pid_dtheta.target = e_theta_global;
 
-
-        //computes the commands for the base in the global referential
+        // computes the commands for the base in the global referential
         _pid_dv.compute(&_args_pid_dv);
         _pid_dtan.compute(&_args_pid_dtan);
         _pid_dtheta.compute(&_args_pid_dtheta);
 
-        //translate the outputs from the position Pids into commands in the base referential for the motor Pids
-        _rbdc_cmds.cmd_lin = cosf(_odometry->getTheta()) * _args_pid_dv.output + sinf(_odometry->getTheta()) * _args_pid_dtan.output;
-        _rbdc_cmds.cmd_tan = -sinf(_odometry->getTheta()) * _args_pid_dv.output + cosf(_odometry->getTheta()) * _args_pid_dtan.output;
+        // translate the outputs from the position Pids into commands in the base referential for
+        // the motor Pids
+        _rbdc_cmds.cmd_lin = cosf(_odometry->getTheta()) * _args_pid_dv.output
+                + sinf(_odometry->getTheta()) * _args_pid_dtan.output;
+        _rbdc_cmds.cmd_tan = -sinf(_odometry->getTheta()) * _args_pid_dv.output
+                + cosf(_odometry->getTheta()) * _args_pid_dtan.output;
         _rbdc_cmds.cmd_rot = _args_pid_dtheta.output;
-
-
     }
 
     // ======== Update Motor Base ============
@@ -368,11 +367,6 @@ int RBDC::getRunningDirection()
 
 void RBDC::updateMobileBase()
 {
-//    target_speeds _rbdc_cmds;
-//    rbdc_cmds.cmd_rot = _args_pid_dtheta.output;
-//    rbdc_cmds.cmd_lin = _args_pid_dv.output;
-//    rbdc_cmds.cmd_tan = _args_pid_dtan.output;
-
     _mobile_base->setTargetSpeeds(_rbdc_cmds);
     _standby == true ? (_mobile_base->stop()) : (_mobile_base->start());
     _mobile_base->update();

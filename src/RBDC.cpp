@@ -170,11 +170,10 @@ RBDC_status RBDC::update()
         e_theta_global = fmod(_target_pos.pos.theta - _odometry->getTheta(), 2.0f * float(M_PI));
     }
 
-    if (_parameters.rbdc_format == two_wheels_robot) {
+    // for ARM, option "-ffast-math" for floating-point optimizations
+    float error_dv = sqrtf((e_x_global * e_x_global) + (e_y_global * e_y_global));
 
-        float error_dv = sqrtf((e_x_global * e_x_global)
-                + (e_y_global * e_y_global)); // for ARM, option "-ffast-math" for floating-point
-                                              // optimizations
+    if (_parameters.rbdc_format == two_wheels_robot) {
 
         // 1 Q : Is robot inside the target zone ?
         if ((error_dv < _parameters.target_precision)
@@ -295,39 +294,36 @@ RBDC_status RBDC::update()
     }
 
     else if (_parameters.rbdc_format == three_wheels_robot) {
+
+        static float polar_angle;
+
         // condition to consider target reached
-        if ((fabsf(e_x_global) < _parameters.dv_precision)
-                && (fabsf(e_y_global) < _parameters.dv_precision)
+        if ((fabsf(error_dv) < _parameters.dv_precision)
                 && (fabsf(e_theta_global) < _parameters.final_theta_precision)) {
             rbdc_end_status = RBDC_status::RBDC_done;
         }
-
         else {
             rbdc_end_status = RBDC_status::RBDC_moving;
         }
 
         // UPDATE
         _args_pid_dv.actual = 0;
-        _args_pid_dv.target = e_x_global;
-
-        _args_pid_dtan.actual = 0;
-        _args_pid_dtan.target = e_y_global;
+        _args_pid_dv.target = error_dv; // sqrt(e_x² + e_y²)
 
         _args_pid_dtheta.actual = 0;
         _args_pid_dtheta.target = e_theta_global;
 
         // computes the commands for the base in the global referential
         _pid_dv.compute(&_args_pid_dv);
-        _pid_dtan.compute(&_args_pid_dtan);
         _pid_dtheta.compute(&_args_pid_dtheta);
 
-        // translate the outputs from the position Pids into commands in the base referential for
-        // the motor Pids
-        _rbdc_cmds.cmd_lin = cosf(_odometry->getTheta()) * _args_pid_dv.output
-                + sinf(_odometry->getTheta()) * _args_pid_dtan.output;
-        _rbdc_cmds.cmd_tan = -sinf(_odometry->getTheta()) * _args_pid_dv.output
-                + cosf(_odometry->getTheta()) * _args_pid_dtan.output;
+        // todo: optimized
+        polar_angle = atan2f(e_y_global,e_x_global);
+
+        _rbdc_cmds.cmd_lin = _args_pid_dv.output * cosf(polar_angle - _odometry->getTheta());
+        _rbdc_cmds.cmd_tan = _args_pid_dv.output * sinf(polar_angle - _odometry->getTheta());
         _rbdc_cmds.cmd_rot = _args_pid_dtheta.output;
+
     }
 
     // ======== Update Motor Base ============

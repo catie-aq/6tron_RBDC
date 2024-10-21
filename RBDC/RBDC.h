@@ -61,7 +61,7 @@ struct target_position {
     bool correct_final_theta = true;
     bool is_a_vector = false;
     bool absolute_angle = true;
-    bool shortest_angle = true;
+    bool shortest_angle = false;
 };
 
 /*!

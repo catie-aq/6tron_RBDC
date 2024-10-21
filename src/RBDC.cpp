@@ -166,7 +166,7 @@ RBDC_status RBDC::update()
 
     if (_target_pos.shortest_angle) {
         e_theta_global = getDeltaFromTargetTHETA(_target_pos.pos.theta, _odometry->getTheta());
-    } else if (_target_pos.absolute_angle){
+    } else if (_target_pos.absolute_angle) {
         e_theta_global = fmod(_target_pos.pos.theta - _odometry->getTheta(), 2.0f * float(M_PI));
     }
 
@@ -289,6 +289,9 @@ RBDC_status RBDC::update()
                 rbdc_end_status = RBDC_status::RBDC_moving_and_correct_angle;
             }
         }
+
+        _rbdc_cmds.cmd_lin = _args_pid_dv.output;
+        _rbdc_cmds.cmd_rot = _args_pid_dtheta.output;
     }
 
     else if (_parameters.rbdc_format == three_wheels_robot) {

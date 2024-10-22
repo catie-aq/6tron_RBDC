@@ -11,11 +11,9 @@ RBDC::RBDC(Odometry *odometry, MobileBase *mobile_base, RBDC_params rbdc_paramet
         _mobile_base(mobile_base),
         _parameters(rbdc_parameters),
         _pid_dv(rbdc_parameters.pid_param_dv, rbdc_parameters.dt_seconds),
-        _pid_dtheta(rbdc_parameters.pid_param_dteta, rbdc_parameters.dt_seconds),
-        _pid_dtan(rbdc_parameters.pid_param_dtan, rbdc_parameters.dt_seconds)
+        _pid_dtheta(rbdc_parameters.pid_param_dteta, rbdc_parameters.dt_seconds)
 {
     _pid_dv.setLimit(sixtron::PID_limit::output_limit_HL, _parameters.max_output_dv);
-    _pid_dtan.setLimit(sixtron::PID_limit::output_limit_HL, _parameters.max_output_dtan);
     _pid_dtheta.setLimit(sixtron::PID_limit::output_limit_HL, _parameters.max_output_dtheta);
 
     if (_parameters.dv_reducing_coefficient < 0.0f) {
@@ -132,12 +130,10 @@ RBDC_status RBDC::update()
     if (_standby) {
 
         _args_pid_dv.output = 0.0f;
-        _args_pid_dtan.output = 0.0f;
         _args_pid_dtheta.output = 0.0f;
 
         // reset PIDs
         _pid_dv.reset();
-        _pid_dtan.reset();
         _pid_dtheta.reset();
 
         _rbdc_cmds.cmd_lin = 0.0f;

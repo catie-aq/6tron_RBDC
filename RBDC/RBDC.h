@@ -61,7 +61,7 @@ struct target_position {
     bool correct_final_theta = true;
     bool is_a_vector = false;
     bool absolute_angle = true;
-    bool shortest_angle = true;
+    bool shortest_angle = false;
 };
 
 /*!
@@ -125,8 +125,8 @@ private:
     RBDC_params _parameters;
     target_position _target_pos;
     position _target_vector;
-    PID _pid_dv, _pid_dtheta, _pid_dtan;
-    PID_args _args_pid_dv, _args_pid_dtheta, _args_pid_dtan;
+    PID _pid_dv, _pid_dtheta;
+    PID_args _args_pid_dv, _args_pid_dtheta;
 
     float _arrived_theta = 0.0f;
     bool _dv_zone_reached = false;

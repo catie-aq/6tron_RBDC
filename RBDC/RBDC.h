@@ -13,11 +13,11 @@
 #include "pid/pid.h"
 
 #ifndef M_PI
-    #define M_PI (3.14159265358979323846)
+#define M_PI (3.14159265358979323846)
 #endif
 
 #ifndef M_PI_2
-    #define M_PI_2 (1.57079632679489661923)
+#define M_PI_2 (1.57079632679489661923)
 #endif
 
 namespace sixtron {
@@ -60,8 +60,8 @@ struct target_position {
     RBDC_reference ref = RBDC_reference::absolute;
     bool correct_final_theta = true;
     bool is_a_vector = false;
-    bool absolute_angle = true;
-    bool shortest_angle = false;
+    // bool absolute_angle = true;
+    // bool shortest_angle = false;
 };
 
 /*!

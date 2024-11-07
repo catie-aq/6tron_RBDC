@@ -35,7 +35,7 @@ RBDC::RBDC(Odometry *odometry, MobileBase *mobile_base, RBDC_params rbdc_paramet
 static inline float getDeltaFromTargetTHETA(float target_angle_deg, float current_angle)
 {
 
-    float delta = fmod((target_angle_deg - current_angle), float(2 * M_PI));
+    float delta = fmodf((target_angle_deg - current_angle), float(2 * M_PI));
 
     if (delta > float(M_PI)) {
         delta -= float(2 * M_PI);
@@ -103,14 +103,17 @@ void RBDC::updateTargetFromVector()
 void RBDC::setTarget(target_position rbdc_target_pos)
 {
 
+    // Do a fmodf one time, to be sure that input angle is between -360° and +360°
+    rbdc_target_pos.pos.theta = fmodf(rbdc_target_pos.pos.theta, float(2 * M_PI));
+
     if (rbdc_target_pos.ref == RBDC_reference::relative) {
 
         // Transform relative target to global target from current position
         sixtron::position target_transform;
-        target_transform.x = +float(rbdc_target_pos.pos.x) * cos(_odometry->getTheta())
-                - float(rbdc_target_pos.pos.y) * sin(_odometry->getTheta()) + _odometry->getX();
-        target_transform.y = +float(rbdc_target_pos.pos.x) * sin(_odometry->getTheta())
-                + float(rbdc_target_pos.pos.y) * cos(_odometry->getTheta()) + _odometry->getY();
+        target_transform.x = +float(rbdc_target_pos.pos.x) * cosf(_odometry->getTheta())
+                - float(rbdc_target_pos.pos.y) * sinf(_odometry->getTheta()) + _odometry->getX();
+        target_transform.y = +float(rbdc_target_pos.pos.x) * sinf(_odometry->getTheta())
+                + float(rbdc_target_pos.pos.y) * cosf(_odometry->getTheta()) + _odometry->getY();
         target_transform.theta = +float(rbdc_target_pos.pos.theta) + _odometry->getTheta();
         rbdc_target_pos.pos = target_transform;
     }
@@ -160,10 +163,14 @@ RBDC_status RBDC::update()
     float e_y_global = _target_pos.pos.y - _odometry->getY();
     float e_theta_global = _target_pos.pos.theta - _odometry->getTheta();
 
-    if (_target_pos.shortest_angle) {
+    // if (_target_pos.shortest_angle) {
+    //     e_theta_global = getDeltaFromTargetTHETA(_target_pos.pos.theta, _odometry->getTheta());
+    // } else if (_target_pos.absolute_angle) {
+    //     e_theta_global = fmod(_target_pos.pos.theta - _odometry->getTheta(), 2.0f * float(M_PI));
+    // }
+
+    if (_target_pos.ref == RBDC_reference::absolute) {
         e_theta_global = getDeltaFromTargetTHETA(_target_pos.pos.theta, _odometry->getTheta());
-    } else if (_target_pos.absolute_angle) {
-        e_theta_global = fmod(_target_pos.pos.theta - _odometry->getTheta(), 2.0f * float(M_PI));
     }
 
     // for ARM, option "-ffast-math" for floating-point optimizations
@@ -297,8 +304,7 @@ RBDC_status RBDC::update()
         if ((fabsf(error_dv) < _parameters.dv_precision)
                 && (fabsf(e_theta_global) < _parameters.final_theta_precision)) {
             rbdc_end_status = RBDC_status::RBDC_done;
-        }
-        else {
+        } else {
             rbdc_end_status = RBDC_status::RBDC_moving;
         }
 
@@ -314,12 +320,11 @@ RBDC_status RBDC::update()
         _pid_dtheta.compute(&_args_pid_dtheta);
 
         // todo: optimized
-        polar_angle = atan2f(e_y_global,e_x_global);
+        polar_angle = atan2f(e_y_global, e_x_global);
 
         _rbdc_cmds.cmd_lin = _args_pid_dv.output * cosf(polar_angle - _odometry->getTheta());
         _rbdc_cmds.cmd_tan = _args_pid_dv.output * sinf(polar_angle - _odometry->getTheta());
         _rbdc_cmds.cmd_rot = _args_pid_dtheta.output;
-
     }
 
     // ======== Update Motor Base ============

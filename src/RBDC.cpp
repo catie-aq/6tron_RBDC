@@ -163,12 +163,6 @@ RBDC_status RBDC::update()
     float e_y_global = _target_pos.pos.y - _odometry->getY();
     float e_theta_global = _target_pos.pos.theta - _odometry->getTheta();
 
-    // if (_target_pos.shortest_angle) {
-    //     e_theta_global = getDeltaFromTargetTHETA(_target_pos.pos.theta, _odometry->getTheta());
-    // } else if (_target_pos.absolute_angle) {
-    //     e_theta_global = fmod(_target_pos.pos.theta - _odometry->getTheta(), 2.0f * float(M_PI));
-    // }
-
     if (_target_pos.ref == RBDC_reference::absolute) {
         e_theta_global = getDeltaFromTargetTHETA(_target_pos.pos.theta, _odometry->getTheta());
     }
@@ -202,8 +196,7 @@ RBDC_status RBDC::update()
                 float delta_angle;
                 if (_target_pos.correct_final_theta) {
                     // Compute the final angle
-                    delta_angle
-                            = getDeltaFromTargetTHETA(_target_pos.pos.theta, _odometry->getTheta());
+                    delta_angle = e_theta_global;
                 } else {
                     // keep the arrived angle has the default one.
                     delta_angle = getDeltaFromTargetTHETA(_arrived_theta, _odometry->getTheta());

@@ -1,10 +1,10 @@
 [submodule "pid"]
 	path = pid
-	url = git@github.com:catie-aq/6tron_pid.git
+	url = https://github.com/catie-aq/6tron_pid
 	branch = master
 [submodule "odometry"]
 	path = odometry
-	url = git@github.com:catie-aq/6tron_odometry.git
+	url = https://github.com/catie-aq/6tron_odometry
 	branch = main
 [submodule "mobile-base"]
 	path = mobile-base

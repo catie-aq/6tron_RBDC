@@ -77,27 +77,30 @@ void RBDC::setTarget(position target_pos, RBDC_reference reference)
     setTarget(target);
 }
 
-void RBDC::setVector(float v_linear_x, float v_angular_z, RBDC_reference reference)
+void RBDC::setVector(float v_linear_x, float v_linear_y, float v_angular_z, RBDC_reference reference)
+{
+    target_speeds target;
+    target.cmd_lin = v_linear_x;
+    target.cmd_tan = v_linear_y;
+    target.cmd_rot = v_angular_z;
+
+    setVector(target, reference);
+}
+
+void  RBDC::setVector(target_speeds rbdc_target_speeds, RBDC_reference reference)
 {
     target_position target; //! todo : should be a speeds structure instead ? more logical
-    target.pos.x = v_linear_x;
-    target.pos.y = 0.0f;
-    target.pos.theta = v_angular_z;
+
     target.correct_final_theta = false;
     target.is_a_vector = true;
-    target.ref = reference; // default is relative, for mobile base
+    target.ref = reference; // default should bed relative, for mobile base
+
+    _target_vector.cmd_lin = rbdc_target_speeds.cmd_lin;
+    _target_vector.cmd_tan = rbdc_target_speeds.cmd_tan;
+    _target_vector.cmd_rot = rbdc_target_speeds.cmd_rot;
 
     setTarget(target);
 }
-
-// void RBDC::updateTargetFromVector()
-// {
-//     _target_pos.pos.x = _request_vector.x;
-//     _target_pos.pos.y = _request_vector.y;
-//     _target_pos.pos.theta = 0.0f;
-//
-//     setTarget(_target_pos);
-// }
 
 void RBDC::setTarget(target_position rbdc_target_pos)
 {
@@ -105,11 +108,6 @@ void RBDC::setTarget(target_position rbdc_target_pos)
     // If it is a vector, do nothing else
     if (rbdc_target_pos.is_a_vector) {
         _target_pos = rbdc_target_pos;
-
-        // Save the target vector for absolute reference
-        //! is this really useful ??
-        _request_vector.cmd_lin = rbdc_target_pos.pos.x;
-        _request_vector.cmd_rot = rbdc_target_pos.pos.theta;
 
         return;
     }
@@ -162,27 +160,23 @@ RBDC_status RBDC::update()
     // ======= Vector check ================
 
     if (_target_pos.is_a_vector) {
-        // // Add the vector to current position (in relative reference)
-        // updateTargetFromVector();
 
         if (_target_pos.ref == RBDC_reference::absolute) {
             // convert the vector to a global ref, instead of robot local base, not sure if this is useful
-
-            //! TODO ?
-
+            _rbdc_cmds.cmd_lin = (_target_vector.cmd_lin * cosf(_odometry->getTheta())) - (_target_vector.cmd_tan * sinf(_odometry->getTheta()));
+            _rbdc_cmds.cmd_tan = (_target_vector.cmd_lin * sinf(_odometry->getTheta())) + (_target_vector.cmd_tan * cosf(_odometry->getTheta()));
+            _rbdc_cmds.cmd_rot = _target_vector.cmd_rot;
 
         } else {
             // in local base, relative reference, just send the vector to the mobile base
-            _rbdc_cmds.cmd_lin = _target_pos.pos.x; // v_linear_x
-            _rbdc_cmds.cmd_tan = 0.0f; // v_y
-            _rbdc_cmds.cmd_rot = _target_pos.pos.theta; // v_angular_z
+            _rbdc_cmds = _target_vector;
 
         }
 
-        //! TODO : CAREFUL : by doing that, all accelerating ramp are shunted. No PID is used.
+        //! CAREFUL: by doing that, all accelerating ramp are shunted. No PID is used.
         updateMobileBase();
 
-        return RBDC_status::RBDC_moving; // RBDC will always (and only) move when working with a vector.
+        return RBDC_status::RBDC_following_vector; // RBDC will always (and only) move when working with a vector.
     }
 
     // =========== Run RBDC =================

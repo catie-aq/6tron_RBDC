@@ -26,7 +26,7 @@ namespace sixtron {
 #define RBDC_DIR_FORWARD (1)
 #define RBDC_DIR_BACKWARD (-1)
 
-#define RBDC_MAX_STATUS 7
+#define RBDC_MAX_STATUS 8
 
 typedef enum {
     two_wheels_robot,
@@ -47,6 +47,7 @@ typedef enum {
     RBDC_moving = 4, // 1.2.1
     RBDC_moving_and_correct_angle = 5, // 1.2.2.1
     RBDC_correct_initial_angle = 6, // 1.2.2.2
+    RBDC_following_vector = 7,
 } RBDC_status;
 
 /*!
@@ -57,9 +58,9 @@ typedef struct target_position target_position;
 
 struct target_position {
     position pos;
-    RBDC_reference ref = RBDC_reference::absolute;
-    bool correct_final_theta = true;
-    bool is_a_vector = false;
+    RBDC_reference ref = RBDC_reference::absolute; // global plane reference by default
+    bool correct_final_theta = true; // will be set to false when no angle is provided
+    bool is_a_vector = false; // when true, pos will be read as a "target_speeds" vector
 };
 
 /*!
@@ -88,17 +89,22 @@ class RBDC {
 public:
     RBDC(Odometry *odometry, MobileBase *mobile_base, RBDC_params rbdc_parameters);
 
+    // Target is a postion (x y theta)
     void setTarget(float x, float y, RBDC_reference reference = RBDC_reference::absolute);
     void setTarget(
             float x, float y, float theta, RBDC_reference reference = RBDC_reference::absolute);
     void setTarget(position target_pos, RBDC_reference reference = RBDC_reference::absolute);
+
+    // Target is a vector (BRDC is shunted, and send speeds data directly to the mobile base)
+    void setVector(float v_linear_x, float v_linear_y, float v_angular_z, RBDC_reference reference = RBDC_reference::relative);
+    void setVector(target_speeds rbdc_target_speeds, RBDC_reference reference = RBDC_reference::relative);
+
+    // Main setTarget function, the one function to rule them all
     void setTarget(target_position rbdc_target_pos);
-    void setVector(float v_x, float v_y, RBDC_reference reference = RBDC_reference::relative);
 
     void cancel(); // cancel current target.
-
     void pause(); // save current goal, wait for next start to continue
-    void stop(); // cancel current target and put RBD in standby mode. Need start to wake up.
+    void stop(); // cancel current target and put RBDC in standby mode. Need start to wake up.
     void start(); // get out of standby mode.
 
     int getRunningDirection();
@@ -115,14 +121,13 @@ private:
     bool _standby = false;
     int _running_direction;
     void updateMobileBase();
-    // void updateTargetFromVector();
 
     Odometry *_odometry;
     MobileBase *_mobile_base;
 
     RBDC_params _parameters;
     target_position _target_pos;
-    target_speeds _request_vector;
+    target_speeds _target_vector;
     PID _pid_dv, _pid_dtheta;
     PID_args _args_pid_dv, _args_pid_dtheta;
 

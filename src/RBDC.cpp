@@ -163,8 +163,8 @@ RBDC_status RBDC::update()
 
         if (_target_pos.ref == RBDC_reference::absolute) {
             // convert the vector to a global ref, instead of robot local base, not sure if this is useful
-            _rbdc_cmds.cmd_lin = (_target_vector.cmd_lin * cosf(_odometry->getTheta())) - (_target_vector.cmd_tan * sinf(_odometry->getTheta()));
-            _rbdc_cmds.cmd_tan = (_target_vector.cmd_lin * sinf(_odometry->getTheta())) + (_target_vector.cmd_tan * cosf(_odometry->getTheta()));
+            _rbdc_cmds.cmd_lin = (_target_vector.cmd_lin * cosf(-_odometry->getTheta())) - (_target_vector.cmd_tan * sinf(-_odometry->getTheta()));
+            _rbdc_cmds.cmd_tan = (_target_vector.cmd_lin * sinf(-_odometry->getTheta())) + (_target_vector.cmd_tan * cosf(-_odometry->getTheta()));
             _rbdc_cmds.cmd_rot = _target_vector.cmd_rot;
 
         } else {

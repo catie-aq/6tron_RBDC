@@ -93,7 +93,7 @@ public:
             float x, float y, float theta, RBDC_reference reference = RBDC_reference::absolute);
     void setTarget(position target_pos, RBDC_reference reference = RBDC_reference::absolute);
     void setTarget(target_position rbdc_target_pos);
-    void setVector(float x, float y);
+    void setVector(float v_x, float v_y, RBDC_reference reference = RBDC_reference::relative);
 
     void cancel(); // cancel current target.
 
@@ -115,14 +115,14 @@ private:
     bool _standby = false;
     int _running_direction;
     void updateMobileBase();
-    void updateTargetFromVector();
+    // void updateTargetFromVector();
 
     Odometry *_odometry;
     MobileBase *_mobile_base;
 
     RBDC_params _parameters;
     target_position _target_pos;
-    position _target_vector;
+    target_speeds _request_vector;
     PID _pid_dv, _pid_dtheta;
     PID_args _args_pid_dv, _args_pid_dtheta;
 

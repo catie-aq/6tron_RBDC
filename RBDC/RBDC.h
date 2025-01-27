@@ -95,7 +95,7 @@ public:
             float x, float y, float theta, RBDC_reference reference = RBDC_reference::absolute);
     void setTarget(position target_pos, RBDC_reference reference = RBDC_reference::absolute);
 
-    // Target is a vector (BRDC is shunted, and send speeds data directly to the mobile base)
+    // Target is a vector (most of BRDC is shunted, and send speeds directly to the mobile base)
     void setVector(float v_linear_x, float v_linear_y, float v_angular_z, RBDC_reference reference = RBDC_reference::relative);
     void setVector(target_speeds rbdc_target_speeds, RBDC_reference reference = RBDC_reference::relative);
 

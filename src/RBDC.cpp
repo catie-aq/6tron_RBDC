@@ -89,8 +89,7 @@ void RBDC::setVector(float v_linear_x, float v_linear_y, float v_angular_z, RBDC
 
 void  RBDC::setVector(target_speeds rbdc_target_speeds, RBDC_reference reference)
 {
-    target_position target; //! todo : should be a speeds structure instead ? more logical
-
+    target_position target;
     target.correct_final_theta = false;
     target.is_a_vector = true;
     target.ref = reference; // default should bed relative, for mobile base
@@ -160,23 +159,18 @@ RBDC_status RBDC::update()
     // ======= Vector check ================
 
     if (_target_pos.is_a_vector) {
-
         if (_target_pos.ref == RBDC_reference::absolute) {
             // convert the vector to a global ref, instead of robot local base, not sure if this is useful
             _rbdc_cmds.cmd_lin = (_target_vector.cmd_lin * cosf(-_odometry->getTheta())) - (_target_vector.cmd_tan * sinf(-_odometry->getTheta()));
             _rbdc_cmds.cmd_tan = (_target_vector.cmd_lin * sinf(-_odometry->getTheta())) + (_target_vector.cmd_tan * cosf(-_odometry->getTheta()));
             _rbdc_cmds.cmd_rot = _target_vector.cmd_rot;
-
         } else {
             // in local base, relative reference, just send the vector to the mobile base
             _rbdc_cmds = _target_vector;
-
         }
-
         //! CAREFUL: by doing that, all accelerating ramp are shunted. No PID is used.
         updateMobileBase();
-
-        return RBDC_status::RBDC_following_vector; // RBDC will always (and only) move when working with a vector.
+        return RBDC_status::RBDC_following_vector; // In this mode, RBDC will always (and only) following a vector.
     }
 
     // =========== Run RBDC =================

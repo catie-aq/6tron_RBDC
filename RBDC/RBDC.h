@@ -40,6 +40,11 @@ typedef enum {
 } RBDC_reference;
 
 typedef enum {
+    trapezoidal,
+    pid_only
+} movement_type;
+
+typedef enum {
     RBDC_standby = 0,
     RBDC_working = 1, // This should never happen, as we cover all the cases at each iteration.
     RBDC_done = 2, // 1.1.1 robot arrive on target
@@ -51,6 +56,34 @@ typedef enum {
 } RBDC_status;
 
 /*!
+ *  \struct speed_parameters
+ *  Limits for the given speed type (linear or anguar)
+ */
+typedef struct speed_parameters speed_parameters;
+
+struct speed_parameters {
+    float max_accel = 0.0f; // max acceleration when ramping up (positive or negative) in [m/s²].
+    float max_decel = 0.0f; // max deceleration when ramping down (positive or negative) in [m/s²].
+    float max_speed = 0.0f; // max speed (positive or negative) in [m/s].
+};
+
+/*!
+ *  \struct trapezoid_profile
+ *  RBDC trapezoidal profile
+ */
+typedef struct trapezoid_profile trapezoid_profile;
+
+struct trapezoid_profile {
+    speed_parameters speed_params;
+    float t_1 = 0.0f;
+    float t_2 = 0.0f;
+    float t_count = 0.0f;
+    float t_increment = 0.0f;
+    float speed_increment = 0.0f;
+    float speed_decrement = 0.0f;
+};
+
+/*!
  *  \struct target_position
  *  RBDC target position
  */
@@ -59,6 +92,8 @@ typedef struct target_position target_position;
 struct target_position {
     position pos;
     RBDC_reference ref = RBDC_reference::absolute; // global plane reference by default
+    movement_type movement = movement_type::trapezoidal;
+    trapezoid_profile trapeze_data;
     bool correct_final_theta = true; // will be set to false when no angle is provided
     bool is_a_vector = false; // when true, pos will be read as a "target_speeds" vector
 };
@@ -75,6 +110,10 @@ struct RBDC_params {
     float max_output_dtheta = 1.0f; // max command output, eg -1.0f to +1.0f
     float max_output_dv = 1.0f;
     float max_output_dtan = 1.0f;
+
+    speed_parameters linear_speed_parameters;
+    speed_parameters angular_speed_parameters;
+
     float final_theta_precision = 0.0f;
     float moving_theta_precision = 0.0f;
     float target_precision = 0.5f; // must be greater than dv_precision
@@ -96,8 +135,12 @@ public:
     void setTarget(position target_pos, RBDC_reference reference = RBDC_reference::absolute);
 
     // Target is a vector (most of BRDC is shunted, and send speeds directly to the mobile base)
-    void setVector(float v_linear_x, float v_linear_y, float v_angular_z, RBDC_reference reference = RBDC_reference::relative);
-    void setVector(target_speeds rbdc_target_speeds, RBDC_reference reference = RBDC_reference::relative);
+    void setVector(float v_linear_x,
+            float v_linear_y,
+            float v_angular_z,
+            RBDC_reference reference = RBDC_reference::relative);
+    void setVector(
+            target_speeds rbdc_target_speeds, RBDC_reference reference = RBDC_reference::relative);
 
     // Main setTarget function, the one function to rule them all
     void setTarget(target_position rbdc_target_pos);

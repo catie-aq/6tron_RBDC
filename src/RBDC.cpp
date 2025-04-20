@@ -46,6 +46,11 @@ static inline float getDeltaFromTargetTHETA(float target_angle_deg, float curren
     return delta;
 }
 
+// this function compute the necessary data to do a correct trapezoid movement
+static inline void computeTrapezoidalProfile(target_position *pos, speed_parameters params)
+{
+}
+
 void RBDC::setTarget(float x, float y, RBDC_reference reference)
 {
     target_position target;
@@ -77,7 +82,8 @@ void RBDC::setTarget(position target_pos, RBDC_reference reference)
     setTarget(target);
 }
 
-void RBDC::setVector(float v_linear_x, float v_linear_y, float v_angular_z, RBDC_reference reference)
+void RBDC::setVector(
+        float v_linear_x, float v_linear_y, float v_angular_z, RBDC_reference reference)
 {
     target_speeds target;
     target.cmd_lin = v_linear_x;
@@ -87,7 +93,7 @@ void RBDC::setVector(float v_linear_x, float v_linear_y, float v_angular_z, RBDC
     setVector(target, reference);
 }
 
-void  RBDC::setVector(target_speeds rbdc_target_speeds, RBDC_reference reference)
+void RBDC::setVector(target_speeds rbdc_target_speeds, RBDC_reference reference)
 {
     target_position target;
     target.correct_final_theta = false;
@@ -126,6 +132,10 @@ void RBDC::setTarget(target_position rbdc_target_pos)
         rbdc_target_pos.pos = target_transform;
     }
 
+    if (rbdc_target_pos.movement == trapezoidal) {
+        computeTrapezoidalProfile(&rbdc_target_pos, _parameters.linear_speed_parameters);
+    }
+
     // update target pos
     _target_pos = rbdc_target_pos;
 }
@@ -160,9 +170,12 @@ RBDC_status RBDC::update()
 
     if (_target_pos.is_a_vector) {
         if (_target_pos.ref == RBDC_reference::absolute) {
-            // convert the vector to a global ref, instead of robot local base, not sure if this is useful
-            _rbdc_cmds.cmd_lin = (_target_vector.cmd_lin * cosf(-_odometry->getTheta())) - (_target_vector.cmd_tan * sinf(-_odometry->getTheta()));
-            _rbdc_cmds.cmd_tan = (_target_vector.cmd_lin * sinf(-_odometry->getTheta())) + (_target_vector.cmd_tan * cosf(-_odometry->getTheta()));
+            // convert the vector to a global ref, instead of robot local base, not sure if this is
+            // useful
+            _rbdc_cmds.cmd_lin = (_target_vector.cmd_lin * cosf(-_odometry->getTheta()))
+                    - (_target_vector.cmd_tan * sinf(-_odometry->getTheta()));
+            _rbdc_cmds.cmd_tan = (_target_vector.cmd_lin * sinf(-_odometry->getTheta()))
+                    + (_target_vector.cmd_tan * cosf(-_odometry->getTheta()));
             _rbdc_cmds.cmd_rot = _target_vector.cmd_rot;
         } else {
             // in local base, relative reference, just send the vector to the mobile base
@@ -170,7 +183,8 @@ RBDC_status RBDC::update()
         }
         //! CAREFUL: by doing that, all accelerating ramp are shunted. No PID is used.
         updateMobileBase();
-        return RBDC_status::RBDC_following_vector; // In this mode, RBDC will always (and only) following a vector.
+        return RBDC_status::RBDC_following_vector; // In this mode, RBDC will always (and only)
+                                                   // following a vector.
     }
 
     // =========== Run RBDC =================

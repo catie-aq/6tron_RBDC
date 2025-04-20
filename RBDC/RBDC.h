@@ -74,7 +74,8 @@ struct speed_parameters {
 typedef struct trapezoid_profile trapezoid_profile;
 
 struct trapezoid_profile {
-    speed_parameters speed_params;
+    // speed_parameters speed_params;
+    bool profile_ready = false; // do not modify this parameter (maybe better in private ?)
     float t_1 = 0.0f;
     float t_2 = 0.0f;
     float t_count = 0.0f;
@@ -170,6 +171,7 @@ private:
 
     RBDC_params _parameters;
     target_position _target_pos;
+    position _old_pos;
     target_speeds _target_vector;
     PID _pid_dv, _pid_dtheta;
     PID_args _args_pid_dv, _args_pid_dtheta;

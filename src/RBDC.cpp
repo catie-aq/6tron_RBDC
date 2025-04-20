@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "RBDC/RBDC.h"
+#include "common.h" // todo: to be removed (temp trapeze debug)
 
 namespace sixtron {
 
@@ -47,8 +48,11 @@ static inline float getDeltaFromTargetTHETA(float target_angle_deg, float curren
 }
 
 // this function compute the necessary data to do a correct trapezoid movement
-static inline void computeTrapezoidalProfile(target_position *pos, speed_parameters params)
+static inline void computeTrapezoidalProfile(
+        target_position *pos, speed_parameters params, float distance, float initial_speed)
 {
+
+    pos->trapeze_data.profile_ready = true;
 }
 
 void RBDC::setTarget(float x, float y, RBDC_reference reference)
@@ -132,10 +136,6 @@ void RBDC::setTarget(target_position rbdc_target_pos)
         rbdc_target_pos.pos = target_transform;
     }
 
-    if (rbdc_target_pos.movement == trapezoidal) {
-        computeTrapezoidalProfile(&rbdc_target_pos, _parameters.linear_speed_parameters);
-    }
-
     // update target pos
     _target_pos = rbdc_target_pos;
 }
@@ -200,8 +200,23 @@ RBDC_status RBDC::update()
     }
 
     // for ARM, option "-ffast-math" for floating-point optimizations
-    float error_dv = sqrtf((e_x_global * e_x_global) + (e_y_global * e_y_global));
+    float error_dv = sqrtf((e_x_global * e_x_global) + (e_y_global * e_y_global)); // linear error
 
+    // Compute linear speed
+    float diff_x = _odometry->getX() - _old_pos.x;
+    _old_pos.x = _odometry->getX();
+    float diff_y = _odometry->getY() - _old_pos.y;
+    _old_pos.y = _odometry->getY();
+    float linear_speed = sqrtf((diff_x * diff_x) + (diff_y * diff_y)) / _parameters.dt_seconds;
+    // terminal_printf("lin speed: %6.4f lin err: %6.4f\n", linear_speed, error_dv);
+
+    // Check if trapeze data need to be generated for the first time
+    if ((!_target_pos.trapeze_data.profile_ready)) {
+        computeTrapezoidalProfile(
+                &_target_pos, _parameters.linear_speed_parameters, error_dv, linear_speed);
+    }
+
+    // TODO: Two wheels robot broken for now (trapeze dev)
     if (_parameters.rbdc_format == two_wheels_robot) {
 
         // 1 Q : Is robot inside the target zone ?

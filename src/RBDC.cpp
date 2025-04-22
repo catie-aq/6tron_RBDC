@@ -47,12 +47,55 @@ static inline float getDeltaFromTargetTHETA(float target_angle_deg, float curren
     return delta;
 }
 
-// this function compute the necessary data to do a correct trapezoid movement
-static inline void computeTrapezoidalProfile(
-        target_position *pos, speed_parameters params, float distance, float initial_speed)
+// This function compute the necessary data to do a correct trapezoid movement
+// This algorithm is inspired a lot by Aversive library, written by Microb Technology (Eirbot 2005)
+static inline float apply_trapeze_profile(trapezoid_profile *trapeze_data,
+        const float dt_seconds,
+        const float linear_precision,
+        const speed_parameters speed_params,
+        const float remaining_distance,
+        float current_speed)
 {
 
-    pos->trapeze_data.profile_ready = true;
+    float acc_value = 0.0f, pivot = 0.0f, speed_increment = 0.0f, output_speed = 0.0f;
+
+    // Cap speed input for stability purpose (and validity of calculations)
+    if (current_speed > speed_params.max_speed) {
+        current_speed = speed_params.max_speed;
+    }
+
+    // Pivot Anticipation (to be redefined properly)
+    static float divider_th = 1.0f / 1000.0f;
+    pivot = (current_speed * trapeze_data->pivot_gain) * divider_th;
+
+    // Pivot Compute
+    pivot += current_speed * current_speed / (2.0f * speed_params.max_accel);
+
+    // Check is pivot has been reached or not, define the increment accordingly
+    if (pivot < remaining_distance) {
+        speed_increment = speed_params.max_accel * dt_seconds;
+    } else {
+        speed_increment = -speed_params.max_decel * dt_seconds;
+    }
+
+    // Increment the output speed
+    output_speed = trapeze_data->previous_speed + speed_increment;
+
+    // Cap output speed
+    if (output_speed > speed_params.max_speed) {
+        output_speed = speed_params.max_speed;
+    } else if (output_speed < 0.0f) {
+        output_speed = 0.0f;
+    }
+
+    // cap to 0 m/s if already in precision
+    if (remaining_distance < linear_precision) {
+        output_speed = 0.0f;
+    }
+
+    // Save new speed consign for next time
+    trapeze_data->previous_speed = output_speed;
+    return output_speed;
 }
 
 void RBDC::setTarget(float x, float y, RBDC_reference reference)
@@ -210,11 +253,15 @@ RBDC_status RBDC::update()
     float linear_speed = sqrtf((diff_x * diff_x) + (diff_y * diff_y)) / _parameters.dt_seconds;
     // terminal_printf("lin speed: %6.4f lin err: %6.4f\n", linear_speed, error_dv);
 
-    // Check if trapeze data need to be generated for the first time
-    if ((!_target_pos.trapeze_data.profile_ready)) {
-        computeTrapezoidalProfile(
-                &_target_pos, _parameters.linear_speed_parameters, error_dv, linear_speed);
-    }
+    // Compute the right speed consign compared to the current linear distance error
+    float speed_consign = apply_trapeze_profile(&_trapeze_linear,
+            _parameters.dt_seconds,
+            _parameters.dv_precision,
+            _parameters.linear_speed_parameters,
+            error_dv,
+            linear_speed);
+
+    terminal_printf(">linear_speed:%f§ms\n>speed_consign:%f§ms\n", linear_speed, speed_consign);
 
     // TODO: Two wheels robot broken for now (trapeze dev)
     if (_parameters.rbdc_format == two_wheels_robot) {
@@ -349,8 +396,8 @@ RBDC_status RBDC::update()
         }
 
         // UPDATE
-        _args_pid_dv.actual = 0;
-        _args_pid_dv.target = error_dv; // sqrt(e_x² + e_y²)
+        _args_pid_dv.actual = linear_speed;
+        _args_pid_dv.target = speed_consign;
 
         _args_pid_dtheta.actual = 0;
         _args_pid_dtheta.target = e_theta_global;

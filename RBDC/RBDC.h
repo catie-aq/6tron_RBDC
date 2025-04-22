@@ -62,8 +62,8 @@ typedef enum {
 typedef struct speed_parameters speed_parameters;
 
 struct speed_parameters {
-    float max_accel = 0.0f; // max acceleration when ramping up (positive or negative) in [m/s²].
-    float max_decel = 0.0f; // max deceleration when ramping down (positive or negative) in [m/s²].
+    float max_accel = 0.0f; // max acceleration when ramping up in [m/s²].
+    float max_decel = 0.0f; // max deceleration when ramping down in [m/s²].
     float max_speed = 0.0f; // max speed (positive or negative) in [m/s].
 };
 
@@ -75,13 +75,16 @@ typedef struct trapezoid_profile trapezoid_profile;
 
 struct trapezoid_profile {
     // speed_parameters speed_params;
-    bool profile_ready = false; // do not modify this parameter (maybe better in private ?)
-    float t_1 = 0.0f;
-    float t_2 = 0.0f;
-    float t_count = 0.0f;
-    float t_increment = 0.0f;
-    float speed_increment = 0.0f;
-    float speed_decrement = 0.0f;
+    float previous_speed = 0.0f;
+    float pivot_gain = 1.0f; // see Microb Technology Adversive library
+    // float pivot = 0.0f;
+    // float output_target_speed;
+    // float t_1 = 0.0f;
+    // float t_2 = 0.0f;
+    // float t_count = 0.0f;
+    // float t_increment = 0.0f;
+    // float speed_increment = 0.0f;
+    // float speed_decrement = 0.0f;
 };
 
 /*!
@@ -94,7 +97,7 @@ struct target_position {
     position pos;
     RBDC_reference ref = RBDC_reference::absolute; // global plane reference by default
     movement_type movement = movement_type::trapezoidal;
-    trapezoid_profile trapeze_data;
+    // trapezoid_profile trapeze_data;
     bool correct_final_theta = true; // will be set to false when no angle is provided
     bool is_a_vector = false; // when true, pos will be read as a "target_speeds" vector
 };
@@ -168,6 +171,8 @@ private:
 
     Odometry *_odometry;
     MobileBase *_mobile_base;
+
+    trapezoid_profile _trapeze_linear;
 
     RBDC_params _parameters;
     target_position _target_pos;

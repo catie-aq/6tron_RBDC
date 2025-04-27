@@ -89,7 +89,7 @@ static inline float apply_trapeze_profile(trapezoid_profile *trapeze_data,
     }
 
     // cap to 0 m/s if already in precision
-    if (remaining_distance < linear_precision) {
+    if (remaining_distance < (linear_precision / 5.0f)) { // arbitrary divisor, for better perf
         output_speed = 0.0f;
     }
 
@@ -388,8 +388,8 @@ RBDC_status RBDC::update()
         static float polar_angle;
 
         // condition to consider target reached
-        if ((fabsf(error_dv) < _parameters.dv_precision)
-                && (fabsf(e_theta_global) < _parameters.final_theta_precision)) {
+        if ((error_dv < _parameters.dv_precision)
+                && (e_theta_global < _parameters.final_theta_precision)) {
             rbdc_end_status = RBDC_status::RBDC_done;
         } else {
             rbdc_end_status = RBDC_status::RBDC_moving;
@@ -409,8 +409,12 @@ RBDC_status RBDC::update()
         // todo: optimized
         polar_angle = atan2f(e_y_global, e_x_global);
 
-        _rbdc_cmds.cmd_lin = _args_pid_dv.output * cosf(polar_angle - _odometry->getTheta());
-        _rbdc_cmds.cmd_tan = _args_pid_dv.output * sinf(polar_angle - _odometry->getTheta());
+        // _rbdc_cmds.cmd_lin = _args_pid_dv.output * cosf(polar_angle - _odometry->getTheta());
+        // _rbdc_cmds.cmd_tan = _args_pid_dv.output * sinf(polar_angle - _odometry->getTheta());
+        // _rbdc_cmds.cmd_rot = _args_pid_dtheta.output;
+
+        _rbdc_cmds.cmd_lin = speed_consign * cosf(polar_angle - _odometry->getTheta());
+        _rbdc_cmds.cmd_tan = speed_consign * sinf(polar_angle - _odometry->getTheta());
         _rbdc_cmds.cmd_rot = _args_pid_dtheta.output;
     }
 

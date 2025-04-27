@@ -65,21 +65,32 @@ static inline float apply_trapeze_profile(trapezoid_profile *trapeze_data,
     }
 
     // Pivot Anticipation (to be redefined properly)
-    static float divider_th = 1.0f / 1000.0f;
-    pivot = (current_speed * trapeze_data->pivot_gain) * divider_th;
+    // static float divider_th = 1.0f / 1000.0f;
+    // pivot = (current_speed * trapeze_data->pivot_gain) * divider_th;
 
     // Pivot Compute
-    pivot += current_speed * current_speed / (2.0f * speed_params.max_accel);
+    pivot += current_speed * current_speed / (2.0f * speed_params.max_decel);
 
     // Check is pivot has been reached or not, define the increment accordingly
-    if (pivot < remaining_distance) {
-        speed_increment = speed_params.max_accel * dt_seconds;
-    } else {
+    if (pivot > remaining_distance) {
         speed_increment = -speed_params.max_decel * dt_seconds;
+    } else {
+        speed_increment = +speed_params.max_accel * dt_seconds;
     }
 
+    // static float old_increment = 0.0f;
+    // if (speed_increment != old_increment ) {
+    //     terminal_printf("new speed_increment = %f2.1\n", speed_increment);
+    //     old_increment = speed_increment;
+    // }
+
+    // if (fabsf(trapeze_data->previous_input_speed - current_speed) > fabs(speed_increment)) {
+    //     // something wrong, need to decelerate
+    //     speed_increment = -speed_params.max_decel * dt_seconds;
+    // }
+
     // Increment the output speed
-    output_speed = trapeze_data->previous_speed + speed_increment;
+    output_speed = trapeze_data->previous_output_speed + speed_increment;
 
     // Cap output speed
     if (output_speed > speed_params.max_speed) {
@@ -89,12 +100,16 @@ static inline float apply_trapeze_profile(trapezoid_profile *trapeze_data,
     }
 
     // cap to 0 m/s if already in precision
-    if (remaining_distance < (linear_precision / 5.0f)) { // arbitrary divisor, for better perf
-        output_speed = 0.0f;
-    }
+    // if (remaining_distance < (linear_precision / 5.0f)) { // arbitrary divisor, for better perf
+    //     output_speed = 0.0f;
+    // }
+
+    // terminal_printf("speed = %3.3f, output = %3.3f, dist = %6.4f, pivot = %6.4f ", current_speed,
+    // output_speed, remaining_distance, pivot);
 
     // Save new speed consign for next time
-    trapeze_data->previous_speed = output_speed;
+    trapeze_data->previous_output_speed = output_speed;
+    trapeze_data->previous_input_speed = current_speed;
     return output_speed;
 }
 
@@ -233,6 +248,8 @@ RBDC_status RBDC::update()
     // =========== Run RBDC =================
     RBDC_status rbdc_end_status = RBDC_status::RBDC_working;
 
+    // ==== Compute remaining distance ======
+
     // defines the remaining distance to target in the global referential
     float e_x_global = _target_pos.pos.x - _odometry->getX();
     float e_y_global = _target_pos.pos.y - _odometry->getY();
@@ -250,8 +267,8 @@ RBDC_status RBDC::update()
     _old_pos.x = _odometry->getX();
     float diff_y = _odometry->getY() - _old_pos.y;
     _old_pos.y = _odometry->getY();
-    float linear_speed = sqrtf((diff_x * diff_x) + (diff_y * diff_y)) / _parameters.dt_seconds;
-    // terminal_printf("lin speed: %6.4f lin err: %6.4f\n", linear_speed, error_dv);
+    float linear_speed = (sqrtf((diff_x * diff_x) + (diff_y * diff_y)) / _parameters.dt_seconds)
+            * 1.44f; // remove this magic value ...
 
     // Compute the right speed consign compared to the current linear distance error
     float speed_consign = apply_trapeze_profile(&_trapeze_linear,
@@ -416,6 +433,8 @@ RBDC_status RBDC::update()
         _rbdc_cmds.cmd_lin = speed_consign * cosf(polar_angle - _odometry->getTheta());
         _rbdc_cmds.cmd_tan = speed_consign * sinf(polar_angle - _odometry->getTheta());
         _rbdc_cmds.cmd_rot = _args_pid_dtheta.output;
+        // terminal_printf("cmd lin = %6.4f, cmd tan = %6.4f, cmd rot = %6.4f\n",
+        // _rbdc_cmds.cmd_lin, _rbdc_cmds.cmd_tan, _rbdc_cmds.cmd_rot);
     }
 
     // ======== Update Motor Base ============

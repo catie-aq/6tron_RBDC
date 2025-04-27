@@ -75,7 +75,8 @@ typedef struct trapezoid_profile trapezoid_profile;
 
 struct trapezoid_profile {
     // speed_parameters speed_params;
-    float previous_speed = 0.0f;
+    float previous_output_speed = 0.0f;
+    float previous_input_speed = 0.0f;
     float pivot_gain = 1.0f; // see Microb Technology Adversive library
     // float pivot = 0.0f;
     // float output_target_speed;

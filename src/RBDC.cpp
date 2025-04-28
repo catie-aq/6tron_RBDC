@@ -64,9 +64,10 @@ static inline float apply_trapeze_profile(trapezoid_profile *trapeze_data,
         current_speed = speed_params.max_speed;
     }
 
-    // Pivot Anticipation (to be redefined properly)
-    // static float divider_th = 1.0f / 1000.0f;
-    // pivot = (current_speed * trapeze_data->pivot_gain) * divider_th;
+    // Pivot Anticipation
+    // todo: to be redefined properly, this could prevents overshooting
+    static float divider_th = 1.0f / 100.0f; // depend on dt_seconds ??
+    pivot = (current_speed * trapeze_data->pivot_gain) * divider_th;
 
     // Pivot Compute
     pivot += current_speed * current_speed / (2.0f * speed_params.max_decel);
@@ -100,9 +101,9 @@ static inline float apply_trapeze_profile(trapezoid_profile *trapeze_data,
     }
 
     // cap to 0 m/s if already in precision
-    // if (remaining_distance < (linear_precision / 5.0f)) { // arbitrary divisor, for better perf
-    //     output_speed = 0.0f;
-    // }
+    if (remaining_distance < (linear_precision / 5.0f)) { // arbitrary divisor, for better perf
+        output_speed = 0.0f;
+    }
 
     // terminal_printf("speed = %3.3f, output = %3.3f, dist = %6.4f, pivot = %6.4f ", current_speed,
     // output_speed, remaining_distance, pivot);
@@ -267,8 +268,8 @@ RBDC_status RBDC::update()
     _old_pos.x = _odometry->getX();
     float diff_y = _odometry->getY() - _old_pos.y;
     _old_pos.y = _odometry->getY();
-    float linear_speed = (sqrtf((diff_x * diff_x) + (diff_y * diff_y)) / _parameters.dt_seconds)
-            * 1.44f; // remove this magic value ...
+    // todo: Linear speed should be a class member, could be used by "cancel" function
+    float linear_speed = (sqrtf((diff_x * diff_x) + (diff_y * diff_y)) / _parameters.dt_seconds);
 
     // Compute the right speed consign compared to the current linear distance error
     float speed_consign = apply_trapeze_profile(&_trapeze_linear,
@@ -433,8 +434,6 @@ RBDC_status RBDC::update()
         _rbdc_cmds.cmd_lin = speed_consign * cosf(polar_angle - _odometry->getTheta());
         _rbdc_cmds.cmd_tan = speed_consign * sinf(polar_angle - _odometry->getTheta());
         _rbdc_cmds.cmd_rot = _args_pid_dtheta.output;
-        // terminal_printf("cmd lin = %6.4f, cmd tan = %6.4f, cmd rot = %6.4f\n",
-        // _rbdc_cmds.cmd_lin, _rbdc_cmds.cmd_tan, _rbdc_cmds.cmd_rot);
     }
 
     // ======== Update Motor Base ============
@@ -443,6 +442,7 @@ RBDC_status RBDC::update()
     return rbdc_end_status;
 }
 
+// todo: this function should take into account the deceleration!
 void RBDC::cancel()
 {
     _target_pos.pos.x = _odometry->getX();

@@ -102,10 +102,7 @@ typedef struct RBDC_params RBDC_params;
 
 struct RBDC_params {
     RBDC_format rbdc_format = two_wheels_robot;
-    PID_params pid_param_dv, pid_param_dteta, pid_param_dtan;
-    float max_output_dtheta = 1.0f; // todo: this must disappear, replace by speed_parameters
-    float max_output_dv = 1.0f; // todo: this must disappear, replace by speed_parameters
-    float max_output_dtan = 1.0f; // todo: this must disappear, replace by speed_parameters
+    PID_params pid_param_dv, pid_param_dteta;
 
     speed_parameters linear_speed_parameters;
     speed_parameters angular_speed_parameters;

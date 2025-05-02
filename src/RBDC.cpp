@@ -29,7 +29,8 @@ RBDC::RBDC(Odometry *odometry, MobileBase *mobile_base, RBDC_params rbdc_paramet
         _parameters.dv_precision = _parameters.target_precision;
     }
 
-    _parameters.trapeze_linear.previous_output_speed = 0.0f;
+    _parameters.linear_speed_parameters.trapeze.previous_output_speed = 0.0f;
+    _parameters.angular_speed_parameters.trapeze.previous_output_speed = 0.0f;
 
     // initialization
     _odometry->init();
@@ -53,8 +54,7 @@ static inline float getDeltaFromTargetTHETA(float target_angle_deg, float curren
 
 // This function compute the necessary data to do a correct trapezoid movement
 // This algorithm is inspired a lot by Aversive library, written by Microb Technology (Eirbot 2005)
-static float apply_trapeze_profile(trapezoid_profile *trapeze_data,
-        const speed_parameters &speed_params,
+static float apply_trapeze_profile(speed_parameters *speed_params,
         const float dt_seconds,
         const float linear_precision,
         const float remaining_distance,
@@ -63,40 +63,40 @@ static float apply_trapeze_profile(trapezoid_profile *trapeze_data,
     float pivot = 0.0f, speed_increment = 0.0f, output_speed = 0.0f;
 
     // Cap speed input for stability purpose (and validity of calculations)
-    if (current_speed > speed_params.max_speed) {
-        current_speed = speed_params.max_speed;
+    if (current_speed > speed_params->max_speed) {
+        current_speed = speed_params->max_speed;
     }
 
     // Pivot Anticipation (useful to counteract the delay induced by the velocity control)
-    pivot = (current_speed * trapeze_data->pivot_gain);
+    pivot = (current_speed * speed_params->trapeze.pivot_gain);
 
     // Pivot Compute (the distance when we need to decelerate, depending on the current speed)
-    pivot += current_speed * current_speed / (2.0f * speed_params.max_decel);
+    pivot += current_speed * current_speed / (2.0f * speed_params->max_decel);
 
     // Check is pivot has been reached or not, define the speed increment accordingly
     if (pivot > remaining_distance) {
-        speed_increment = -(speed_params.max_decel * dt_seconds);
+        speed_increment = -(speed_params->max_decel * dt_seconds);
     } else {
-        speed_increment = +(speed_params.max_accel * dt_seconds);
+        speed_increment = +(speed_params->max_accel * dt_seconds);
     }
 
     // Increment the output speed
-    output_speed = trapeze_data->previous_output_speed + speed_increment;
+    output_speed = speed_params->trapeze.previous_output_speed + speed_increment;
 
     // Cap output speed
-    if (output_speed > speed_params.max_speed) {
-        output_speed = speed_params.max_speed;
+    if (output_speed > speed_params->max_speed) {
+        output_speed = speed_params->max_speed;
     } else if (output_speed < 0.0f) {
         output_speed = 0.0f;
     }
 
     // cap to 0 m/s if already in precision
-    if (remaining_distance < (linear_precision * trapeze_data->precision_gain)) {
+    if (remaining_distance < (linear_precision * speed_params->trapeze.precision_gain)) {
         output_speed = 0.0f;
     }
 
     // Save new speed consign for next time
-    trapeze_data->previous_output_speed = output_speed;
+    speed_params->trapeze.previous_output_speed = output_speed;
     return output_speed;
 }
 
@@ -258,8 +258,7 @@ RBDC_status RBDC::update()
     float linear_speed = (sqrtf((diff_x * diff_x) + (diff_y * diff_y)) / _parameters.dt_seconds);
 
     // Compute the right speed consign compared to the current linear distance error
-    float speed_consign = apply_trapeze_profile(&_parameters.trapeze_linear,
-            _parameters.linear_speed_parameters,
+    float speed_consign = apply_trapeze_profile(&_parameters.linear_speed_parameters,
             _parameters.dt_seconds,
             _parameters.target_precision,
             error_dv,

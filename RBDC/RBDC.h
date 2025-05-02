@@ -56,18 +56,6 @@ typedef enum {
 } RBDC_status;
 
 /*!
- *  \struct speed_parameters
- *  Limits for the given speed type (linear or anguar)
- */
-typedef struct speed_parameters speed_parameters;
-
-struct speed_parameters {
-    float max_accel = 0.0f; // max acceleration when ramping up in [m/s²].
-    float max_decel = 0.0f; // max deceleration when ramping down in [m/s²].
-    float max_speed = 0.0f; // max speed (positive or negative) in [m/s].
-};
-
-/*!
  *  \struct trapezoid_profile
  *  RBDC trapezoidal profile
  */
@@ -80,6 +68,19 @@ struct trapezoid_profile {
 };
 
 /*!
+ *  \struct speed_parameters
+ *  Limits for the given speed type (linear or anguar)
+ */
+typedef struct speed_parameters speed_parameters;
+
+struct speed_parameters {
+    float max_accel = 0.0f; // max acceleration when ramping up in [m/s²].
+    float max_decel = 0.0f; // max deceleration when ramping down in [m/s²].
+    float max_speed = 0.0f; // max speed (positive or negative) in [m/s].
+    trapezoid_profile trapeze;
+};
+
+/*!
  *  \struct target_position
  *  RBDC target position
  */
@@ -89,7 +90,6 @@ struct target_position {
     position pos;
     RBDC_reference ref = RBDC_reference::absolute; // global plane reference by default
     movement_type movement = movement_type::trapezoidal;
-    // trapezoid_profile trapeze_data;
     bool correct_final_theta = true; // will be set to false when no angle is provided
     bool is_a_vector = false; // when true, pos will be read as a "target_speeds" vector
 };
@@ -106,8 +106,6 @@ struct RBDC_params {
 
     speed_parameters linear_speed_parameters;
     speed_parameters angular_speed_parameters;
-
-    trapezoid_profile trapeze_linear;
 
     float final_theta_precision = 0.0f;
     float moving_theta_precision = 0.0f;

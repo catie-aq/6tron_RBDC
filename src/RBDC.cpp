@@ -27,6 +27,8 @@ RBDC::RBDC(Odometry *odometry, MobileBase *mobile_base, RBDC_params rbdc_paramet
         _parameters.dv_precision = _parameters.target_precision;
     }
 
+    _parameters.trapeze_linear.previous_output_speed = 0.0f;
+
     // initialization
     _odometry->init();
     _mobile_base->init();
@@ -49,46 +51,32 @@ static inline float getDeltaFromTargetTHETA(float target_angle_deg, float curren
 
 // This function compute the necessary data to do a correct trapezoid movement
 // This algorithm is inspired a lot by Aversive library, written by Microb Technology (Eirbot 2005)
-static inline float apply_trapeze_profile(trapezoid_profile *trapeze_data,
+static float apply_trapeze_profile(trapezoid_profile *trapeze_data,
+        const speed_parameters &speed_params,
         const float dt_seconds,
         const float linear_precision,
-        const speed_parameters speed_params,
         const float remaining_distance,
         float current_speed)
 {
-
-    float acc_value = 0.0f, pivot = 0.0f, speed_increment = 0.0f, output_speed = 0.0f;
+    float pivot = 0.0f, speed_increment = 0.0f, output_speed = 0.0f;
 
     // Cap speed input for stability purpose (and validity of calculations)
     if (current_speed > speed_params.max_speed) {
         current_speed = speed_params.max_speed;
     }
 
-    // Pivot Anticipation
-    // todo: to be redefined properly, this could prevents overshooting
-    static float divider_th = 1.0f / 100.0f; // depend on dt_seconds ??
-    pivot = (current_speed * trapeze_data->pivot_gain) * divider_th;
+    // Pivot Anticipation (useful to counteract the delay induced by the velocity control)
+    pivot = (current_speed * trapeze_data->pivot_gain);
 
-    // Pivot Compute
+    // Pivot Compute (the distance when we need to decelerate, depending on the current speed)
     pivot += current_speed * current_speed / (2.0f * speed_params.max_decel);
 
-    // Check is pivot has been reached or not, define the increment accordingly
+    // Check is pivot has been reached or not, define the speed increment accordingly
     if (pivot > remaining_distance) {
-        speed_increment = -speed_params.max_decel * dt_seconds;
+        speed_increment = -(speed_params.max_decel * dt_seconds);
     } else {
-        speed_increment = +speed_params.max_accel * dt_seconds;
+        speed_increment = +(speed_params.max_accel * dt_seconds);
     }
-
-    // static float old_increment = 0.0f;
-    // if (speed_increment != old_increment ) {
-    //     terminal_printf("new speed_increment = %f2.1\n", speed_increment);
-    //     old_increment = speed_increment;
-    // }
-
-    // if (fabsf(trapeze_data->previous_input_speed - current_speed) > fabs(speed_increment)) {
-    //     // something wrong, need to decelerate
-    //     speed_increment = -speed_params.max_decel * dt_seconds;
-    // }
 
     // Increment the output speed
     output_speed = trapeze_data->previous_output_speed + speed_increment;
@@ -101,16 +89,12 @@ static inline float apply_trapeze_profile(trapezoid_profile *trapeze_data,
     }
 
     // cap to 0 m/s if already in precision
-    if (remaining_distance < (linear_precision / 5.0f)) { // arbitrary divisor, for better perf
+    if (remaining_distance < (linear_precision * trapeze_data->precision_gain)) {
         output_speed = 0.0f;
     }
 
-    // terminal_printf("speed = %3.3f, output = %3.3f, dist = %6.4f, pivot = %6.4f ", current_speed,
-    // output_speed, remaining_distance, pivot);
-
     // Save new speed consign for next time
     trapeze_data->previous_output_speed = output_speed;
-    trapeze_data->previous_input_speed = current_speed;
     return output_speed;
 }
 
@@ -272,10 +256,10 @@ RBDC_status RBDC::update()
     float linear_speed = (sqrtf((diff_x * diff_x) + (diff_y * diff_y)) / _parameters.dt_seconds);
 
     // Compute the right speed consign compared to the current linear distance error
-    float speed_consign = apply_trapeze_profile(&_trapeze_linear,
-            _parameters.dt_seconds,
-            _parameters.dv_precision,
+    float speed_consign = apply_trapeze_profile(&_parameters.trapeze_linear,
             _parameters.linear_speed_parameters,
+            _parameters.dt_seconds,
+            _parameters.target_precision,
             error_dv,
             linear_speed);
 

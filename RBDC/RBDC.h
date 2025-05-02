@@ -74,18 +74,9 @@ struct speed_parameters {
 typedef struct trapezoid_profile trapezoid_profile;
 
 struct trapezoid_profile {
-    // speed_parameters speed_params;
-    float previous_output_speed = 0.0f;
-    float previous_input_speed = 0.0f;
-    float pivot_gain = 7.0f; // see Microb Technology Adversive library
-    // float pivot = 0.0f;
-    // float output_target_speed;
-    // float t_1 = 0.0f;
-    // float t_2 = 0.0f;
-    // float t_count = 0.0f;
-    // float t_increment = 0.0f;
-    // float speed_increment = 0.0f;
-    // float speed_decrement = 0.0f;
+    float pivot_gain = 0.0f; // fine-tune the distance needed to decelerate properly
+    float precision_gain = 1.0f; // fine-tune the precision when the trapeze must stop
+    float previous_output_speed = 0.0f; // trapeze backup value
 };
 
 /*!
@@ -112,20 +103,22 @@ typedef struct RBDC_params RBDC_params;
 struct RBDC_params {
     RBDC_format rbdc_format = two_wheels_robot;
     PID_params pid_param_dv, pid_param_dteta, pid_param_dtan;
-    float max_output_dtheta = 1.0f; // max command output, eg -1.0f to +1.0f
-    float max_output_dv = 1.0f;
-    float max_output_dtan = 1.0f;
+    float max_output_dtheta = 1.0f; // todo: this must disappear, replace by speed_parameters
+    float max_output_dv = 1.0f; // todo: this must disappear, replace by speed_parameters
+    float max_output_dtan = 1.0f; // todo: this must disappear, replace by speed_parameters
 
     speed_parameters linear_speed_parameters;
     speed_parameters angular_speed_parameters;
 
+    trapezoid_profile trapeze_linear;
+
     float final_theta_precision = 0.0f;
     float moving_theta_precision = 0.0f;
-    float target_precision = 0.5f; // must be greater than dv_precision
-    float dv_precision = 0.0f;
-    float dv_reducing_coefficient = 0.80f; // coefficient, between 0.0f and 1.0f;
-    float dt_seconds = 0.0f;
-    bool can_go_backward = true;
+    float target_precision = 0.5f;
+    float dv_precision = 0.0f; // todo: this must disappear
+    float dv_reducing_coefficient = 0.80f; // coefficient, between 0.0f and 1.0f; (todo: burn this)
+    float dt_seconds = 0.0f; // todo: rename "time_step" or equivalent, remove "dt"?
+    bool can_go_backward = true; // ignore when holonomic
 };
 
 class RBDC {
@@ -172,8 +165,6 @@ private:
 
     Odometry *_odometry;
     MobileBase *_mobile_base;
-
-    trapezoid_profile _trapeze_linear;
 
     RBDC_params _parameters;
     target_position _target_pos;

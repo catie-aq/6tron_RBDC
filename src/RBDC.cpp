@@ -29,6 +29,14 @@ RBDC::RBDC(Odometry *odometry, MobileBase *mobile_base, RBDC_params rbdc_paramet
         _parameters.dv_precision = _parameters.target_precision;
     }
 
+    // If needed, set default movement behavior for linear and angular speed calculations
+    if (_parameters.linear_speed_parameters.movement == movement_type::undefined) {
+        _parameters.linear_speed_parameters.movement = movement_type::trapezoidal_only;
+    }
+    if (_parameters.angular_speed_parameters.movement == movement_type::undefined) {
+        _parameters.angular_speed_parameters.movement = movement_type::pid_only;
+    }
+
     _parameters.linear_speed_parameters.trapeze.previous_output_speed = 0.0f;
     _parameters.angular_speed_parameters.trapeze.previous_output_speed = 0.0f;
 

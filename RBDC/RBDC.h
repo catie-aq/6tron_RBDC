@@ -40,15 +40,48 @@ typedef enum {
 } RBDC_reference;
 
 typedef enum {
+    undefined, // default behavior will be set at RBDC start
+    pid_only, // generally for the angle only
+    trapezoidal_only, // when the mobile base and the motors have a great response to speed command
+    trapezoidal_and_pid, // when the mobile base need a linear speed control after trapeze output
+} movement_type;
+
+typedef enum {
     RBDC_standby = 0,
     RBDC_working = 1, // This should never happen, as we cover all the cases at each iteration.
-    RBDC_done = 2, // 1.1.1 robot arrive on target
+    RBDC_done = 2, // 1.1.1 robot arrive at target
     RBDC_correct_final_angle = 3, // 1.1.2
     RBDC_moving = 4, // 1.2.1
     RBDC_moving_and_correct_angle = 5, // 1.2.2.1
     RBDC_correct_initial_angle = 6, // 1.2.2.2
     RBDC_following_vector = 7,
 } RBDC_status;
+
+/*!
+ *  \struct trapezoid_profile
+ *  RBDC trapezoidal profile
+ */
+typedef struct trapezoid_profile trapezoid_profile;
+
+struct trapezoid_profile {
+    float pivot_gain = 0.0f; // fine-tune the distance needed to decelerate properly
+    float precision_gain = 1.0f; // fine-tune the precision when the trapeze must stop
+    float previous_output_speed = 0.0f; // trapeze backup value
+};
+
+/*!
+ *  \struct speed_parameters
+ *  Limits for the given speed type (linear or anguar)
+ */
+typedef struct speed_parameters speed_parameters;
+
+struct speed_parameters {
+    float max_accel = 0.0f; // max acceleration when ramping up in [m/s²].
+    float max_decel = 0.0f; // max deceleration when ramping down in [m/s²].
+    float max_speed = 0.0f; // max speed (positive or negative) in [m/s].
+    trapezoid_profile trapeze;
+    movement_type movement = movement_type::undefined;
+};
 
 /*!
  *  \struct target_position
@@ -59,6 +92,7 @@ typedef struct target_position target_position;
 struct target_position {
     position pos;
     RBDC_reference ref = RBDC_reference::absolute; // global plane reference by default
+
     bool correct_final_theta = true; // will be set to false when no angle is provided
     bool is_a_vector = false; // when true, pos will be read as a "target_speeds" vector
 };
@@ -71,17 +105,18 @@ typedef struct RBDC_params RBDC_params;
 
 struct RBDC_params {
     RBDC_format rbdc_format = two_wheels_robot;
-    PID_params pid_param_dv, pid_param_dteta, pid_param_dtan;
-    float max_output_dtheta = 1.0f; // max command output, eg -1.0f to +1.0f
-    float max_output_dv = 1.0f;
-    float max_output_dtan = 1.0f;
+    PID_params pid_param_dv, pid_param_dteta;
+
+    speed_parameters linear_speed_parameters;
+    speed_parameters angular_speed_parameters;
+
     float final_theta_precision = 0.0f;
     float moving_theta_precision = 0.0f;
-    float target_precision = 0.5f; // must be greater than dv_precision
-    float dv_precision = 0.0f;
-    float dv_reducing_coefficient = 0.80f; // coefficient, between 0.0f and 1.0f;
-    float dt_seconds = 0.0f;
-    bool can_go_backward = true;
+    float target_precision = 0.5f;
+    float dv_precision = 0.0f; // todo: this must disappear
+    float dv_reducing_coefficient = 0.80f; // coefficient, between 0.0f and 1.0f; (todo: burn this)
+    float dt_seconds = 0.0f; // todo: rename "time_step" or equivalent, remove "dt"?
+    bool can_go_backward = true; // ignore when holonomic
 };
 
 class RBDC {
@@ -96,8 +131,12 @@ public:
     void setTarget(position target_pos, RBDC_reference reference = RBDC_reference::absolute);
 
     // Target is a vector (most of BRDC is shunted, and send speeds directly to the mobile base)
-    void setVector(float v_linear_x, float v_linear_y, float v_angular_z, RBDC_reference reference = RBDC_reference::relative);
-    void setVector(target_speeds rbdc_target_speeds, RBDC_reference reference = RBDC_reference::relative);
+    void setVector(float v_linear_x,
+            float v_linear_y,
+            float v_angular_z,
+            RBDC_reference reference = RBDC_reference::relative);
+    void setVector(
+            target_speeds rbdc_target_speeds, RBDC_reference reference = RBDC_reference::relative);
 
     // Main setTarget function, the one function to rule them all
     void setTarget(target_position rbdc_target_pos);
@@ -127,6 +166,7 @@ private:
 
     RBDC_params _parameters;
     target_position _target_pos;
+    position _old_pos;
     target_speeds _target_vector;
     PID _pid_dv, _pid_dtheta;
     PID_args _args_pid_dv, _args_pid_dtheta;

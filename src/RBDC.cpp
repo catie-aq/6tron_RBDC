@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "RBDC/RBDC.h"
+#include "common.h" // todo: to be removed (temp trapeze debug)
 
 namespace sixtron {
 
@@ -13,8 +14,10 @@ RBDC::RBDC(Odometry *odometry, MobileBase *mobile_base, RBDC_params rbdc_paramet
         _pid_dv(rbdc_parameters.pid_param_dv, rbdc_parameters.dt_seconds),
         _pid_dtheta(rbdc_parameters.pid_param_dteta, rbdc_parameters.dt_seconds)
 {
-    _pid_dv.setLimit(sixtron::PID_limit::output_limit_HL, _parameters.max_output_dv);
-    _pid_dtheta.setLimit(sixtron::PID_limit::output_limit_HL, _parameters.max_output_dtheta);
+    _pid_dv.setLimit(
+            sixtron::PID_limit::output_limit_HL, _parameters.linear_speed_parameters.max_speed);
+    _pid_dtheta.setLimit(
+            sixtron::PID_limit::output_limit_HL, _parameters.angular_speed_parameters.max_speed);
 
     if (_parameters.dv_reducing_coefficient < 0.0f) {
         _parameters.dv_reducing_coefficient = 0.0f;
@@ -25,6 +28,17 @@ RBDC::RBDC(Odometry *odometry, MobileBase *mobile_base, RBDC_params rbdc_paramet
     if (_parameters.dv_precision > _parameters.target_precision) {
         _parameters.dv_precision = _parameters.target_precision;
     }
+
+    // If needed, set default movement behavior for linear and angular speed calculations
+    if (_parameters.linear_speed_parameters.movement == movement_type::undefined) {
+        _parameters.linear_speed_parameters.movement = movement_type::trapezoidal_only;
+    }
+    if (_parameters.angular_speed_parameters.movement == movement_type::undefined) {
+        _parameters.angular_speed_parameters.movement = movement_type::pid_only;
+    }
+
+    _parameters.linear_speed_parameters.trapeze.previous_output_speed = 0.0f;
+    _parameters.angular_speed_parameters.trapeze.previous_output_speed = 0.0f;
 
     // initialization
     _odometry->init();
@@ -44,6 +58,54 @@ static inline float getDeltaFromTargetTHETA(float target_angle_deg, float curren
     }
 
     return delta;
+}
+
+// This function compute the necessary data to do a correct trapezoid movement
+// This algorithm is inspired a lot by Aversive library, written by Microb Technology (Eirbot 2005)
+static float apply_trapeze_profile(speed_parameters *speed_params,
+        const float dt_seconds,
+        const float linear_precision,
+        const float remaining_distance,
+        float current_speed)
+{
+    float pivot = 0.0f, speed_increment = 0.0f, output_speed = 0.0f;
+
+    // Cap speed input for stability purpose (and validity of calculations)
+    if (current_speed > speed_params->max_speed) {
+        current_speed = speed_params->max_speed;
+    }
+
+    // Pivot Anticipation (useful to counteract the delay induced by the velocity control)
+    pivot = (current_speed * speed_params->trapeze.pivot_gain);
+
+    // Pivot Compute (the distance when we need to decelerate, depending on the current speed)
+    pivot += current_speed * current_speed / (2.0f * speed_params->max_decel);
+
+    // Check is pivot has been reached or not, define the speed increment accordingly
+    if (pivot > remaining_distance) {
+        speed_increment = -(speed_params->max_decel * dt_seconds);
+    } else {
+        speed_increment = +(speed_params->max_accel * dt_seconds);
+    }
+
+    // Increment the output speed
+    output_speed = speed_params->trapeze.previous_output_speed + speed_increment;
+
+    // Cap output speed
+    if (output_speed > speed_params->max_speed) {
+        output_speed = speed_params->max_speed;
+    } else if (output_speed < 0.0f) {
+        output_speed = 0.0f;
+    }
+
+    // cap to 0 m/s if already in precision
+    if (remaining_distance < (linear_precision * speed_params->trapeze.precision_gain)) {
+        output_speed = 0.0f;
+    }
+
+    // Save new speed consign for next time
+    speed_params->trapeze.previous_output_speed = output_speed;
+    return output_speed;
 }
 
 void RBDC::setTarget(float x, float y, RBDC_reference reference)
@@ -77,7 +139,8 @@ void RBDC::setTarget(position target_pos, RBDC_reference reference)
     setTarget(target);
 }
 
-void RBDC::setVector(float v_linear_x, float v_linear_y, float v_angular_z, RBDC_reference reference)
+void RBDC::setVector(
+        float v_linear_x, float v_linear_y, float v_angular_z, RBDC_reference reference)
 {
     target_speeds target;
     target.cmd_lin = v_linear_x;
@@ -87,7 +150,7 @@ void RBDC::setVector(float v_linear_x, float v_linear_y, float v_angular_z, RBDC
     setVector(target, reference);
 }
 
-void  RBDC::setVector(target_speeds rbdc_target_speeds, RBDC_reference reference)
+void RBDC::setVector(target_speeds rbdc_target_speeds, RBDC_reference reference)
 {
     target_position target;
     target.correct_final_theta = false;
@@ -160,9 +223,12 @@ RBDC_status RBDC::update()
 
     if (_target_pos.is_a_vector) {
         if (_target_pos.ref == RBDC_reference::absolute) {
-            // convert the vector to a global ref, instead of robot local base, not sure if this is useful
-            _rbdc_cmds.cmd_lin = (_target_vector.cmd_lin * cosf(-_odometry->getTheta())) - (_target_vector.cmd_tan * sinf(-_odometry->getTheta()));
-            _rbdc_cmds.cmd_tan = (_target_vector.cmd_lin * sinf(-_odometry->getTheta())) + (_target_vector.cmd_tan * cosf(-_odometry->getTheta()));
+            // convert the vector to a global ref, instead of robot local base, not sure if this is
+            // useful
+            _rbdc_cmds.cmd_lin = (_target_vector.cmd_lin * cosf(-_odometry->getTheta()))
+                    - (_target_vector.cmd_tan * sinf(-_odometry->getTheta()));
+            _rbdc_cmds.cmd_tan = (_target_vector.cmd_lin * sinf(-_odometry->getTheta()))
+                    + (_target_vector.cmd_tan * cosf(-_odometry->getTheta()));
             _rbdc_cmds.cmd_rot = _target_vector.cmd_rot;
         } else {
             // in local base, relative reference, just send the vector to the mobile base
@@ -170,11 +236,14 @@ RBDC_status RBDC::update()
         }
         //! CAREFUL: by doing that, all accelerating ramp are shunted. No PID is used.
         updateMobileBase();
-        return RBDC_status::RBDC_following_vector; // In this mode, RBDC will always (and only) following a vector.
+        return RBDC_status::RBDC_following_vector; // In this mode, RBDC will always (and only)
+                                                   // following a vector.
     }
 
     // =========== Run RBDC =================
     RBDC_status rbdc_end_status = RBDC_status::RBDC_working;
+
+    // ==== Compute remaining distance ======
 
     // defines the remaining distance to target in the global referential
     float e_x_global = _target_pos.pos.x - _odometry->getX();
@@ -186,8 +255,26 @@ RBDC_status RBDC::update()
     }
 
     // for ARM, option "-ffast-math" for floating-point optimizations
-    float error_dv = sqrtf((e_x_global * e_x_global) + (e_y_global * e_y_global));
+    float error_dv = sqrtf((e_x_global * e_x_global) + (e_y_global * e_y_global)); // linear error
 
+    // Compute linear speed
+    float diff_x = _odometry->getX() - _old_pos.x;
+    _old_pos.x = _odometry->getX();
+    float diff_y = _odometry->getY() - _old_pos.y;
+    _old_pos.y = _odometry->getY();
+    // todo: Linear speed should be a class member, could be used by "cancel" function
+    float linear_speed = (sqrtf((diff_x * diff_x) + (diff_y * diff_y)) / _parameters.dt_seconds);
+
+    // Compute the right speed consign compared to the current linear distance error
+    float speed_consign = apply_trapeze_profile(&_parameters.linear_speed_parameters,
+            _parameters.dt_seconds,
+            _parameters.target_precision,
+            error_dv,
+            linear_speed);
+
+    terminal_printf(">linear_speed:%f§ms\n>speed_consign:%f§ms\n", linear_speed, speed_consign);
+
+    // TODO: Two wheels robot broken for now (trapeze dev)
     if (_parameters.rbdc_format == two_wheels_robot) {
 
         // 1 Q : Is robot inside the target zone ?
@@ -312,16 +399,16 @@ RBDC_status RBDC::update()
         static float polar_angle;
 
         // condition to consider target reached
-        if ((fabsf(error_dv) < _parameters.dv_precision)
-                && (fabsf(e_theta_global) < _parameters.final_theta_precision)) {
+        if ((error_dv < _parameters.dv_precision)
+                && (e_theta_global < _parameters.final_theta_precision)) {
             rbdc_end_status = RBDC_status::RBDC_done;
         } else {
             rbdc_end_status = RBDC_status::RBDC_moving;
         }
 
         // UPDATE
-        _args_pid_dv.actual = 0;
-        _args_pid_dv.target = error_dv; // sqrt(e_x² + e_y²)
+        _args_pid_dv.actual = linear_speed;
+        _args_pid_dv.target = speed_consign;
 
         _args_pid_dtheta.actual = 0;
         _args_pid_dtheta.target = e_theta_global;
@@ -333,8 +420,12 @@ RBDC_status RBDC::update()
         // todo: optimized
         polar_angle = atan2f(e_y_global, e_x_global);
 
-        _rbdc_cmds.cmd_lin = _args_pid_dv.output * cosf(polar_angle - _odometry->getTheta());
-        _rbdc_cmds.cmd_tan = _args_pid_dv.output * sinf(polar_angle - _odometry->getTheta());
+        // _rbdc_cmds.cmd_lin = _args_pid_dv.output * cosf(polar_angle - _odometry->getTheta());
+        // _rbdc_cmds.cmd_tan = _args_pid_dv.output * sinf(polar_angle - _odometry->getTheta());
+        // _rbdc_cmds.cmd_rot = _args_pid_dtheta.output;
+
+        _rbdc_cmds.cmd_lin = speed_consign * cosf(polar_angle - _odometry->getTheta());
+        _rbdc_cmds.cmd_tan = speed_consign * sinf(polar_angle - _odometry->getTheta());
         _rbdc_cmds.cmd_rot = _args_pid_dtheta.output;
     }
 
@@ -344,6 +435,7 @@ RBDC_status RBDC::update()
     return rbdc_end_status;
 }
 
+// todo: this function should take into account the deceleration!
 void RBDC::cancel()
 {
     _target_pos.pos.x = _odometry->getX();

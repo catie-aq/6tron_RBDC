@@ -119,14 +119,40 @@ static float get_speed_command(speed_control_parameters *speed_control,
         float const distance_error)
 {
     float speed_command = 0.0f;
+    float negate_speed = 1.0f, negate_distance_error = 1.0f;
 
-    if (speed_control->movement == movement_type::trapezoidal_only) {
+    // Apply trapeze if set
+    if (speed_control->movement == movement_type::trapezoidal_only
+            || speed_control->movement == movement_type::trapezoidal_and_pid) {
+
+        // special case: if input speed is negative. Should only appear for the angle.
+        if (actual_speed < 0.0f) {
+            negate_speed = -1.0f;
+        }
+
+        // same for the distance_error, again, should only appear for the angle.
+        // todo ??? not sur
+        if (distance_error < 0.0f) {
+            negate_distance_error = -1.0f;
+        }
+
         // Compute the right speed consign compared to the current linear distance error
-        speed_command
-                = apply_trapeze_profile(speed_control, dt_seconds, distance_error, actual_speed);
+        speed_command = apply_trapeze_profile(speed_control,
+                dt_seconds,
+                distance_error * negate_distance_error,
+                actual_speed * negate_speed);
     }
 
-    return speed_command;
+    if (speed_control->movement == movement_type::pid_only) {
+        pid_args->actual = actual_speed;
+        pid_args->target = distance_error;
+
+        pid->compute(pid_args);
+
+        speed_command = pid_args->output;
+    }
+
+    return negate_speed * speed_command;
 }
 
 void RBDC::setTarget(float x, float y, RBDC_reference reference)
@@ -440,12 +466,19 @@ RBDC_status RBDC::update()
         terminal_printf(
                 ">linear_speed:%f§ms\n>speed_command:%f§ms\n", linear_speed, linear_speed_command);
 
-        _args_pid_angular.actual = 0;
-        _args_pid_angular.target = e_theta_global;
+        // _args_pid_angular.actual = 0;
+        // _args_pid_angular.target = e_theta_global;
+
+        float angular_speed_command = get_speed_command(&_parameters.angular_control,
+                _parameters.dt_seconds,
+                &_pid_angular,
+                &_args_pid_angular,
+                0.0f,
+                e_theta_global);
 
         // computes the commands for the base in the global referential
         // _pid_linear.compute(&_args_pid_linear);
-        _pid_angular.compute(&_args_pid_angular);
+        // _pid_angular.compute(&_args_pid_angular);
 
         // todo: optimized
         polar_angle = atan2f(e_y_global, e_x_global);
@@ -456,7 +489,7 @@ RBDC_status RBDC::update()
 
         _rbdc_cmds.cmd_lin = linear_speed_command * cosf(polar_angle - _odometry->getTheta());
         _rbdc_cmds.cmd_tan = linear_speed_command * sinf(polar_angle - _odometry->getTheta());
-        _rbdc_cmds.cmd_rot = _args_pid_angular.output;
+        _rbdc_cmds.cmd_rot = angular_speed_command;
     }
 
     // ======== Update Motor Base ============

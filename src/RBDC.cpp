@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "RBDC/RBDC.h"
-#include "common.h" // todo: to be removed (temp trapeze debug)
 
 namespace sixtron {
 
@@ -119,11 +118,12 @@ static float get_speed_command(speed_control_parameters *speed_control,
         float const distance_error)
 {
     float speed_command = 0.0f;
-    float negate_speed = 1.0f, negate_distance_error = 1.0f;
 
     // Apply trapeze if set
     if (speed_control->movement == movement_type::trapezoidal_only
             || speed_control->movement == movement_type::trapezoidal_and_pid) {
+        float negate_speed = 1.0f;
+        float negate_distance_error = 1.0f;
 
         // special case: if input speed is negative. Should only appear for the angle.
         if (actual_speed < 0.0f) {
@@ -253,9 +253,6 @@ void RBDC::setTarget(target_position rbdc_target_pos)
 
 RBDC_status RBDC::update()
 {
-
-    static uint32_t timestamp = 1627551892437;
-
     // ====== Get actual odometry ===========
     _odometry->update();
 
@@ -475,19 +472,6 @@ RBDC_status RBDC::update()
                 angular_speed,
                 e_theta_global);
 
-        // terminal_printf(
-        // ">angular_speed:%f§ms\n>angular_command:%f§ms\n", angular_speed, angular_speed_command);
-        terminal_printf(">angular_speed:%d:%f§ms\n>angular_command:%d:%f§ms\n>current_angle:%d:%"
-                        "f§ms\n>e_theta_global:%d:%f§ms\n",
-                timestamp,
-                angular_speed,
-                timestamp,
-                angular_speed_command,
-                timestamp,
-                _odometry->getTheta() / 0.017453f,
-                timestamp,
-                e_theta_global / 0.017453f);
-
         // todo: optimized
         polar_angle = atan2f(e_y_global, e_x_global);
 
@@ -499,7 +483,6 @@ RBDC_status RBDC::update()
     // ======== Update Motor Base ============
     updateMobileBase();
 
-    timestamp++;
     return rbdc_end_status;
 }
 

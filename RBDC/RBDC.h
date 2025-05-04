@@ -70,17 +70,21 @@ struct trapezoid_profile {
 };
 
 /*!
- *  \struct speed_parameters
- *  Limits for the given speed type (linear or anguar)
+ *  \struct speed_control_parameters
+ *  Velocity controle parameters for the given speed type (linear or angular)
  */
-typedef struct speed_parameters speed_parameters;
+typedef struct speed_control_parameters speed_control_parameters;
 
-struct speed_parameters {
+struct speed_control_parameters {
     float max_accel = 0.0f; // max acceleration when ramping up in [m/s²].
     float max_decel = 0.0f; // max deceleration when ramping down in [m/s²].
     float max_speed = 0.0f; // max speed (positive or negative) in [m/s].
     trapezoid_profile trapeze;
     movement_type movement = movement_type::undefined;
+    float precision = 0.0f;
+    // PID *pid = nullptr; // not sure if it is a good idea here
+    // PID_args pid_args; // same comment
+    PID_params pid_params;
 };
 
 /*!
@@ -105,15 +109,15 @@ typedef struct RBDC_params RBDC_params;
 
 struct RBDC_params {
     RBDC_format rbdc_format = two_wheels_robot;
-    PID_params pid_param_dv, pid_param_dteta;
+    // PID_params pid_param_dv, pid_param_dteta;
 
-    speed_parameters linear_speed_parameters;
-    speed_parameters angular_speed_parameters;
+    speed_control_parameters linear_control;
+    speed_control_parameters angular_control;
 
-    float final_theta_precision = 0.0f;
+    // float final_theta_precision = 0.0f;
     float moving_theta_precision = 0.0f;
-    float target_precision = 0.5f;
-    float dv_precision = 0.0f; // todo: this must disappear
+    // float target_precision = 0.5f;
+    // float dv_precision = 0.0f; // todo: this must disappear
     float dv_reducing_coefficient = 0.80f; // coefficient, between 0.0f and 1.0f; (todo: burn this)
     float dt_seconds = 0.0f; // todo: rename "time_step" or equivalent, remove "dt"?
     bool can_go_backward = true; // ignore when holonomic
@@ -168,8 +172,9 @@ private:
     target_position _target_pos;
     position _old_pos;
     target_speeds _target_vector;
-    PID _pid_dv, _pid_dtheta;
-    PID_args _args_pid_dv, _args_pid_dtheta;
+
+    PID _pid_linear, _pid_angular;
+    PID_args _args_pid_linear, _args_pid_angular;
 
     float _arrived_theta = 0.0f;
     bool _dv_zone_reached = false;

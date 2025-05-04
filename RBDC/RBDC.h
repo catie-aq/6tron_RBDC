@@ -186,6 +186,8 @@ private:
     position _old_pos;
     target_speeds _target_vector;
 
+    float _old_angular_speed = 0.0f, _old_linear_speed = 0.0f;
+
     PID _pid_linear, _pid_angular;
     PID_args _args_pid_linear, _args_pid_angular;
 

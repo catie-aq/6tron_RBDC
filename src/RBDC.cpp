@@ -109,6 +109,26 @@ static float apply_trapeze_profile(speed_control_parameters *speed_params,
     return output_speed;
 }
 
+// General function to compute the right speed command depending on movement type.
+// This is the equivalent of a modular servo controlled loop.
+static float get_speed_command(speed_control_parameters *speed_control,
+        const float dt_seconds,
+        PID *pid,
+        PID_args *pid_args,
+        float const actual_speed,
+        float const distance_error)
+{
+    float speed_command = 0.0f;
+
+    if (speed_control->movement == movement_type::trapezoidal_only) {
+        // Compute the right speed consign compared to the current linear distance error
+        speed_command
+                = apply_trapeze_profile(speed_control, dt_seconds, distance_error, actual_speed);
+    }
+
+    return speed_command;
+}
+
 void RBDC::setTarget(float x, float y, RBDC_reference reference)
 {
     target_position target;
@@ -256,34 +276,36 @@ RBDC_status RBDC::update()
     }
 
     // for ARM, option "-ffast-math" for floating-point optimizations
-    float error_dv = sqrtf((e_x_global * e_x_global) + (e_y_global * e_y_global)); // linear error
+    float error_linear
+            = sqrtf((e_x_global * e_x_global) + (e_y_global * e_y_global)); // linear error
 
-    // Compute linear speed
+    // Compute linear and angular current speeds
     float diff_x = _odometry->getX() - _old_pos.x;
-    _old_pos.x = _odometry->getX();
     float diff_y = _odometry->getY() - _old_pos.y;
-    _old_pos.y = _odometry->getY();
+    float diff_theta = _odometry->getTheta() - _old_pos.theta;
     // todo: Linear speed should be a class member, could be used by "cancel" function
     float linear_speed = (sqrtf((diff_x * diff_x) + (diff_y * diff_y)) / _parameters.dt_seconds);
+    float angular_speed = (diff_theta) / _parameters.dt_seconds; // careful, this can be negative
+    _old_pos.x = _odometry->getX();
+    _old_pos.y = _odometry->getY();
+    _old_pos.theta = _odometry->getTheta();
 
     // Compute the right speed consign compared to the current linear distance error
-    float speed_consign = apply_trapeze_profile(
-            &_parameters.linear_control, _parameters.dt_seconds, error_dv, linear_speed);
-
-    terminal_printf(">linear_speed:%f§ms\n>speed_consign:%f§ms\n", linear_speed, speed_consign);
+    // float speed_consign = apply_trapeze_profile(
+    //         &_parameters.linear_control, _parameters.dt_seconds, error_dv, linear_speed);
 
     // TODO: Two wheels robot broken for now (trapeze dev)
     if (_parameters.rbdc_format == two_wheels_robot) {
 
         // 1 Q : Is robot inside the target zone ?
-        if ((error_dv < _parameters.linear_control.precision)
-                && (error_dv > -_parameters.linear_control.precision)) {
+        if ((error_linear < _parameters.linear_control.precision)
+                && (error_linear > -_parameters.linear_control.precision)) {
             // 1.1 A : Yes it is.
 
             // Check if robot is inside dv zone. Target zone must be greater than dv zone.
             if (!_dv_zone_reached
-                    && ((error_dv < _parameters.linear_control.precision)
-                            && (error_dv > -_parameters.linear_control.precision))) {
+                    && ((error_linear < _parameters.linear_control.precision)
+                            && (error_linear > -_parameters.linear_control.precision))) {
                 _dv_zone_reached = true;
                 _arrived_theta = _odometry->getTheta(); // save arrive theta the first time we
                                                         // arrived inside dv zone
@@ -365,11 +387,11 @@ RBDC_status RBDC::update()
                     || _target_pos.is_a_vector) {
                 // 1.2.1 A : Yes it is.
 
-                error_dv = _running_direction * error_dv; // Add direction of moving
+                error_linear = _running_direction * error_linear; // Add direction of moving
 
                 // update pid dv
                 _args_pid_linear.actual = 0.0f;
-                _args_pid_linear.target = error_dv;
+                _args_pid_linear.target = error_linear;
                 _pid_linear.compute(&_args_pid_linear);
 
                 rbdc_end_status = RBDC_status::RBDC_moving;
@@ -397,7 +419,7 @@ RBDC_status RBDC::update()
         static float polar_angle;
 
         // condition to consider target reached
-        if ((error_dv < _parameters.linear_control.precision)
+        if ((error_linear < _parameters.linear_control.precision)
                 && (e_theta_global < _parameters.angular_control.precision)) {
             rbdc_end_status = RBDC_status::RBDC_done;
         } else {
@@ -405,14 +427,24 @@ RBDC_status RBDC::update()
         }
 
         // UPDATE
-        _args_pid_linear.actual = linear_speed;
-        _args_pid_linear.target = speed_consign;
+        // _args_pid_linear.actual = linear_speed;
+        // _args_pid_linear.target = speed_consign;
+
+        float linear_speed_command = get_speed_command(&_parameters.linear_control,
+                _parameters.dt_seconds,
+                &_pid_linear,
+                &_args_pid_linear,
+                linear_speed,
+                error_linear);
+
+        terminal_printf(
+                ">linear_speed:%f§ms\n>speed_command:%f§ms\n", linear_speed, linear_speed_command);
 
         _args_pid_angular.actual = 0;
         _args_pid_angular.target = e_theta_global;
 
         // computes the commands for the base in the global referential
-        _pid_linear.compute(&_args_pid_linear);
+        // _pid_linear.compute(&_args_pid_linear);
         _pid_angular.compute(&_args_pid_angular);
 
         // todo: optimized
@@ -422,8 +454,8 @@ RBDC_status RBDC::update()
         // _rbdc_cmds.cmd_tan = _args_pid_linear.output * sinf(polar_angle - _odometry->getTheta());
         // _rbdc_cmds.cmd_rot = _args_pid_angular.output;
 
-        _rbdc_cmds.cmd_lin = speed_consign * cosf(polar_angle - _odometry->getTheta());
-        _rbdc_cmds.cmd_tan = speed_consign * sinf(polar_angle - _odometry->getTheta());
+        _rbdc_cmds.cmd_lin = linear_speed_command * cosf(polar_angle - _odometry->getTheta());
+        _rbdc_cmds.cmd_tan = linear_speed_command * sinf(polar_angle - _odometry->getTheta());
         _rbdc_cmds.cmd_rot = _args_pid_angular.output;
     }
 

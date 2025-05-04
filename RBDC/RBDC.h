@@ -59,14 +59,14 @@ typedef enum {
 
 /*!
  *  \struct trapezoid_profile
- *  RBDC trapezoidal profile
+ *  RBDC trapezoidal profile parameters
  */
 typedef struct trapezoid_profile trapezoid_profile;
 
 struct trapezoid_profile {
     float pivot_gain = 0.0f; // fine-tune the distance needed to decelerate properly
     float precision_gain = 1.0f; // fine-tune the precision when the trapeze must stop
-    float previous_output_speed = 0.0f; // trapeze backup value
+    float previous_output_speed = 0.0f; // todo: trapeze backup value, should be elsewhere
 };
 
 /*!
@@ -86,6 +86,19 @@ struct speed_control_parameters {
     // PID_args pid_args; // same comment
     PID_params pid_params;
 };
+
+/*!
+ * todo:
+ *  we could imagine a full struct called "speed_control" or "servo-controlled loop"
+ *  with the following members :
+ *     - speed_control_parameters
+ *     - trapezoid_profile
+ *     - PID object
+ *     - PID arguments
+ *
+ *  These private instances could improve functions writing in RBDC.cpp.
+ *  And the user should only give a set of "speed_control_parameters".
+ */
 
 /*!
  *  \struct target_position

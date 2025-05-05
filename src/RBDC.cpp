@@ -272,6 +272,10 @@ RBDC_status RBDC::update()
         _linear_controller.pid->reset();
         _angular_controller.pid->reset();
 
+        // reset trapeze
+        _linear_controller.previous_output_speed = 0.0f;
+        _angular_controller.previous_output_speed = 0.0f;
+
         _rbdc_cmds.cmd_lin = 0.0f;
         _rbdc_cmds.cmd_tan = 0.0f;
         _rbdc_cmds.cmd_rot = 0.0f;
@@ -587,11 +591,11 @@ void RBDC::setSpeedProfile(const speed_controller_type controller_type, speed_pr
     if (controller_type == speed_controller_type::linear) {
         _linear_controller.speeds = profile;
         _linear_controller.pid->setLimit(
-                sixtron::PID_limit::output_limit_HL, _linear_controller.speeds.max_speed);
+                PID_limit::output_limit_HL, _linear_controller.speeds.max_speed);
     } else if (controller_type == speed_controller_type::angular) {
         _angular_controller.speeds = profile;
         _angular_controller.pid->setLimit(
-                sixtron::PID_limit::output_limit_HL, _angular_controller.speeds.max_speed);
+                PID_limit::output_limit_HL, _angular_controller.speeds.max_speed);
     }
 }
 

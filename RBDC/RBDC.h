@@ -22,16 +22,15 @@
 
 namespace sixtron {
 
-// Defines for direction, useful for 2 wheels robots only ?
+// Defines for direction, useful for two wheels differential robots only
 #define RBDC_DIR_FORWARD (1)
 #define RBDC_DIR_BACKWARD (-1)
 
 #define RBDC_MAX_STATUS 8
 
 typedef enum {
-    two_wheels_robot,
-    three_wheels_robot,
-    four_wheels_robot
+    differential_robot, // two wheels robot
+    holonomic_robot // three or more wheels robot
 } RBDC_format;
 
 typedef enum {
@@ -134,7 +133,7 @@ struct target_position {
 typedef struct RBDC_params RBDC_params;
 
 struct RBDC_params {
-    RBDC_format rbdc_format = two_wheels_robot;
+    RBDC_format rbdc_format = differential_robot;
 
     speed_control_parameters linear_parameters;
     speed_control_parameters angular_parameters;

@@ -7,7 +7,7 @@
 
 namespace sixtron {
 
-RBDC::RBDC(Odometry *odometry, MobileBase *mobile_base, RBDC_params rbdc_parameters):
+RBDC::RBDC(Odometry *odometry, MobileBase *mobile_base, const RBDC_params &rbdc_parameters):
         _odometry(odometry), _mobile_base(mobile_base), _parameters(rbdc_parameters)
 {
 
@@ -36,19 +36,15 @@ RBDC::RBDC(Odometry *odometry, MobileBase *mobile_base, RBDC_params rbdc_paramet
     _linear_controller.parameters = _parameters.linear_parameters;
     _angular_controller.parameters = _parameters.angular_parameters;
 
-    setSpeedProfile(speed_controller_type::linear, _linear_controller.parameters.default_speeds);
-    setSpeedProfile(speed_controller_type::angular, _angular_controller.parameters.default_speeds);
-
     // Setup PIDs
     _linear_controller.pid
             = new PID(_linear_controller.parameters.pid_params, rbdc_parameters.dt_seconds);
     _angular_controller.pid
             = new PID(_angular_controller.parameters.pid_params, rbdc_parameters.dt_seconds);
 
-    _linear_controller.pid->setLimit(sixtron::PID_limit::output_limit_HL,
-            _linear_controller.parameters.default_speeds.max_speed);
-    _angular_controller.pid->setLimit(sixtron::PID_limit::output_limit_HL,
-            _angular_controller.parameters.default_speeds.max_speed);
+    // Apply default speed profile
+    setSpeedProfile(speed_controller_type::linear, _linear_controller.parameters.default_speeds);
+    setSpeedProfile(speed_controller_type::angular, _angular_controller.parameters.default_speeds);
 
     // initialization
     _odometry->init();
@@ -590,8 +586,12 @@ void RBDC::setSpeedProfile(const speed_controller_type controller_type, speed_pr
     // apply new profile depending on the controller type
     if (controller_type == speed_controller_type::linear) {
         _linear_controller.speeds = profile;
+        _linear_controller.pid->setLimit(
+                sixtron::PID_limit::output_limit_HL, _linear_controller.speeds.max_speed);
     } else if (controller_type == speed_controller_type::angular) {
         _angular_controller.speeds = profile;
+        _angular_controller.pid->setLimit(
+                sixtron::PID_limit::output_limit_HL, _angular_controller.speeds.max_speed);
     }
 }
 

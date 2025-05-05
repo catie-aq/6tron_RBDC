@@ -150,7 +150,7 @@ struct RBDC_params {
 class RBDC {
 
 public:
-    RBDC(Odometry *odometry, MobileBase *mobile_base, RBDC_params rbdc_parameters);
+    RBDC(Odometry *odometry, MobileBase *mobile_base, const RBDC_params &rbdc_parameters);
 
     // Target is a postion (x y theta)
     void setTarget(float x, float y, RBDC_reference reference = RBDC_reference::absolute);
@@ -196,7 +196,7 @@ private:
     MobileBase *_mobile_base;
 
     bool _standby = false;
-    int _running_direction;
+    int _running_direction = RBDC_DIR_FORWARD;
 
     target_position _target_pos;
     target_speeds _target_vector;

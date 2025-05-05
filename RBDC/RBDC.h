@@ -51,7 +51,7 @@ typedef enum {
 typedef enum {
     linear,
     angular
-} speed_control_type;
+} speed_controller_type;
 
 typedef enum {
     RBDC_standby = 0,
@@ -102,25 +102,12 @@ struct speed_control_parameters {
 };
 
 /*!
- * todo:
- *  we could imagine a full struct called "speed_control" or "servo-controlled loop"
- *  with the following members :
- *     - speed_control_parameters
- *     - trapezoid_profile
- *     - PID object
- *     - PID arguments
- *
- *  These private instances could improve functions writing in RBDC.cpp.
- *  And the user should only give a set of "speed_control_parameters".
- */
-
-/*!
- *  \struct speed_control_instance
+ *  \struct speed_controller_instance
  *  Velocity control instance, use privately by the RBDC
  */
-typedef struct speed_control_instance speed_control_instance;
+typedef struct speed_controller_instance speed_controller_instance;
 
-struct speed_control_instance {
+struct speed_controller_instance {
     speed_control_parameters parameters;
     speed_profile speeds;
     float previous_output_speed = 0.0f; // trapeze output backup
@@ -184,9 +171,9 @@ public:
 
     // Manually change speed profile if needed
     void setSpeedProfile(
-            speed_control_type control_type, float max_acc, float max_decel, float max_speed);
-    void setSpeedProfile(speed_control_type control_type, speed_profile profile);
-    void resetSpeedProfile(speed_control_type control_type);
+            speed_controller_type controller_type, float max_acc, float max_decel, float max_speed);
+    void setSpeedProfile(speed_controller_type controller_type, speed_profile profile);
+    void resetSpeedProfile(speed_controller_type controller_type);
 
     void cancel(); // cancel current target.
     void pause(); // save current goal, wait for next start to continue
@@ -218,7 +205,7 @@ private:
     target_speeds _rbdc_cmds;
     void updateMobileBase();
 
-    speed_control_instance _linear_control, _angular_control;
+    speed_controller_instance _linear_controller, _angular_controller;
 
     float _arrived_theta = 0.0f;
     bool _dv_zone_reached = false;

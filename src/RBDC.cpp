@@ -33,22 +33,22 @@ RBDC::RBDC(Odometry *odometry, MobileBase *mobile_base, RBDC_params rbdc_paramet
     }
 
     // Update control loop instances
-    _linear_control.parameters = _parameters.linear_parameters;
-    _angular_control.parameters = _parameters.angular_parameters;
+    _linear_controller.parameters = _parameters.linear_parameters;
+    _angular_controller.parameters = _parameters.angular_parameters;
 
-    _linear_control.speeds = _linear_control.parameters.default_speeds;
-    _angular_control.speeds = _angular_control.parameters.default_speeds;
+    setSpeedProfile(speed_controller_type::linear, _linear_controller.parameters.default_speeds);
+    setSpeedProfile(speed_controller_type::angular, _angular_controller.parameters.default_speeds);
 
     // Setup PIDs
-    _linear_control.pid
-            = new PID(_linear_control.parameters.pid_params, rbdc_parameters.dt_seconds);
-    _angular_control.pid
-            = new PID(_angular_control.parameters.pid_params, rbdc_parameters.dt_seconds);
+    _linear_controller.pid
+            = new PID(_linear_controller.parameters.pid_params, rbdc_parameters.dt_seconds);
+    _angular_controller.pid
+            = new PID(_angular_controller.parameters.pid_params, rbdc_parameters.dt_seconds);
 
-    _linear_control.pid->setLimit(sixtron::PID_limit::output_limit_HL,
-            _linear_control.parameters.default_speeds.max_speed);
-    _angular_control.pid->setLimit(sixtron::PID_limit::output_limit_HL,
-            _angular_control.parameters.default_speeds.max_speed);
+    _linear_controller.pid->setLimit(sixtron::PID_limit::output_limit_HL,
+            _linear_controller.parameters.default_speeds.max_speed);
+    _angular_controller.pid->setLimit(sixtron::PID_limit::output_limit_HL,
+            _angular_controller.parameters.default_speeds.max_speed);
 
     // initialization
     _odometry->init();
@@ -72,7 +72,7 @@ static inline float getDeltaFromTargetTHETA(float target_angle_deg, float curren
 
 // This function compute the necessary data to do a correct trapezoid movement
 // This algorithm is inspired a lot by Aversive library, written by Microb Technology (Eirbot 2005)
-static float apply_trapeze_profile(speed_control_instance *control_instance,
+static float apply_trapeze_profile(speed_controller_instance *control_instance,
         const float dt_seconds,
         const float remaining_distance,
         float current_speed)
@@ -120,7 +120,7 @@ static float apply_trapeze_profile(speed_control_instance *control_instance,
 
 // General function to compute the right speed command depending on movement type.
 // This is the equivalent of a modular servo controlled loop.
-static float get_speed_command(speed_control_instance *control_instance,
+static float get_speed_command(speed_controller_instance *control_instance,
         const float dt_seconds,
         float const actual_speed,
         float const distance_error)
@@ -269,12 +269,12 @@ RBDC_status RBDC::update()
 
     if (_standby) {
 
-        _linear_control.pid_args.output = 0.0f;
-        _angular_control.pid_args.output = 0.0f;
+        _linear_controller.pid_args.output = 0.0f;
+        _angular_controller.pid_args.output = 0.0f;
 
         // reset PIDs
-        _linear_control.pid->reset();
-        _angular_control.pid->reset();
+        _linear_controller.pid->reset();
+        _angular_controller.pid->reset();
 
         _rbdc_cmds.cmd_lin = 0.0f;
         _rbdc_cmds.cmd_tan = 0.0f;
@@ -341,14 +341,14 @@ RBDC_status RBDC::update()
     if (_parameters.rbdc_format == two_wheels_robot) {
 
         // 1 Q : Is robot inside the target zone ?
-        if ((error_linear < _linear_control.parameters.precision)
-                && (error_linear > -_linear_control.parameters.precision)) {
+        if ((error_linear < _linear_controller.parameters.precision)
+                && (error_linear > -_linear_controller.parameters.precision)) {
             // 1.1 A : Yes it is.
 
             // Check if robot is inside dv zone. Target zone must be greater than dv zone.
             if (!_dv_zone_reached
-                    && ((error_linear < _linear_control.parameters.precision)
-                            && (error_linear > -_linear_control.parameters.precision))) {
+                    && ((error_linear < _linear_controller.parameters.precision)
+                            && (error_linear > -_linear_controller.parameters.precision))) {
                 _dv_zone_reached = true;
                 _arrived_theta = _odometry->getTheta(); // save arrive theta the first time we
                                                         // arrived inside dv zone
@@ -357,8 +357,8 @@ RBDC_status RBDC::update()
             // Correct angle ONLY if inside target zone AND dv zone already reached
             if (_dv_zone_reached) {
                 // Be sure that dv is shutdown
-                _linear_control.pid->reset();
-                _linear_control.pid_args.output = 0.0f;
+                _linear_controller.pid->reset();
+                _linear_controller.pid_args.output = 0.0f;
                 _first_move = true; // reset first move for next target update
 
                 float delta_angle;
@@ -371,12 +371,12 @@ RBDC_status RBDC::update()
                 }
 
                 // update pid theta
-                _angular_control.pid_args.actual = 0.0f;
-                _angular_control.pid_args.target = delta_angle;
-                _angular_control.pid->compute(&_angular_control.pid_args);
+                _angular_controller.pid_args.actual = 0.0f;
+                _angular_controller.pid_args.target = delta_angle;
+                _angular_controller.pid->compute(&_angular_controller.pid_args);
 
                 // 1.1 Q : Is target angle (or final angle) correct ?
-                if (fabs(delta_angle) < _angular_control.parameters.precision) {
+                if (fabs(delta_angle) < _angular_controller.parameters.precision) {
                     // 1.1.1 A : Yes it is. The robot base is in target position.
                     rbdc_end_status = RBDC_status::RBDC_done;
                 } else {
@@ -410,15 +410,15 @@ RBDC_status RBDC::update()
             }
 
             // update pid theta
-            _angular_control.pid_args.actual = 0.0f;
-            _angular_control.pid_args.target = delta_angle;
-            _angular_control.pid->compute(&_angular_control.pid_args);
+            _angular_controller.pid_args.actual = 0.0f;
+            _angular_controller.pid_args.target = delta_angle;
+            _angular_controller.pid->compute(&_angular_controller.pid_args);
 
             if (_first_move) {
                 // 1.2.2.2 A
                 // if it is the first move, use a more accurate position instead of
                 // moving_theta_precision
-                if ((fabs(delta_angle) < _angular_control.parameters.precision)
+                if ((fabs(delta_angle) < _angular_controller.parameters.precision)
                         || _target_pos.is_a_vector) {
                     _first_move = false;
                 }
@@ -433,9 +433,9 @@ RBDC_status RBDC::update()
                 error_linear = _running_direction * error_linear; // Add direction of moving
 
                 // update pid dv
-                _linear_control.pid_args.actual = 0.0f;
-                _linear_control.pid_args.target = error_linear;
-                _linear_control.pid->compute(&_angular_control.pid_args);
+                _linear_controller.pid_args.actual = 0.0f;
+                _linear_controller.pid_args.target = error_linear;
+                _linear_controller.pid->compute(&_angular_controller.pid_args);
 
                 rbdc_end_status = RBDC_status::RBDC_moving;
 
@@ -445,7 +445,7 @@ RBDC_status RBDC::update()
                 // position. But, the PID Theta can't keep up (maybe output PWM are already at max)
                 // So we need to reduce the speed, in order for the angle to be corrected correctly.
 
-                _linear_control.pid_args.output = _linear_control.pid_args.output
+                _linear_controller.pid_args.output = _linear_controller.pid_args.output
                         * _parameters.dv_reducing_coefficient; // reduce by given coefficient,
                                                                // only one time
 
@@ -453,8 +453,8 @@ RBDC_status RBDC::update()
             }
         }
 
-        _rbdc_cmds.cmd_lin = _linear_control.pid_args.output;
-        _rbdc_cmds.cmd_rot = _angular_control.pid_args.output;
+        _rbdc_cmds.cmd_lin = _linear_controller.pid_args.output;
+        _rbdc_cmds.cmd_rot = _angular_controller.pid_args.output;
     }
 
     else if (_parameters.rbdc_format == three_wheels_robot) {
@@ -462,18 +462,18 @@ RBDC_status RBDC::update()
         static float polar_angle;
 
         // condition to consider target reached
-        if ((error_linear < _linear_control.parameters.precision)
-                && (e_theta_global < _angular_control.parameters.precision)) {
+        if ((error_linear < _linear_controller.parameters.precision)
+                && (e_theta_global < _angular_controller.parameters.precision)) {
             rbdc_end_status = RBDC_status::RBDC_done;
         } else {
             rbdc_end_status = RBDC_status::RBDC_moving;
         }
 
         linear_speed_command = get_speed_command(
-                &_linear_control, _parameters.dt_seconds, linear_speed, error_linear);
+                &_linear_controller, _parameters.dt_seconds, linear_speed, error_linear);
 
         angular_speed_command = get_speed_command(
-                &_angular_control, _parameters.dt_seconds, angular_speed, e_theta_global);
+                &_angular_controller, _parameters.dt_seconds, angular_speed, e_theta_global);
 
         // todo: optimized
         polar_angle = atan2f(e_y_global, e_x_global);
@@ -566,6 +566,43 @@ void RBDC::setAbsolutePosition(position absolute_pos)
 target_position RBDC::getTarget()
 {
     return _target_pos;
+}
+
+void RBDC::setSpeedProfile(const speed_controller_type controller_type,
+        const float max_acc,
+        const float max_decel,
+        const float max_speed)
+{
+    speed_profile profile;
+    profile.max_accel = max_acc;
+    profile.max_decel = max_decel;
+    profile.max_speed = max_speed;
+    setSpeedProfile(controller_type, profile);
+}
+
+void RBDC::setSpeedProfile(const speed_controller_type controller_type, speed_profile profile)
+{
+    // check negative values
+    profile.max_accel = (profile.max_accel < 0.0f) ? -profile.max_accel : profile.max_accel;
+    profile.max_decel = (profile.max_decel < 0.0f) ? -profile.max_decel : profile.max_decel;
+    profile.max_speed = (profile.max_speed < 0.0f) ? -profile.max_speed : profile.max_speed;
+
+    // apply new profile depending on the controller type
+    if (controller_type == speed_controller_type::linear) {
+        _linear_controller.speeds = profile;
+    } else if (controller_type == speed_controller_type::angular) {
+        _angular_controller.speeds = profile;
+    }
+}
+
+void RBDC::resetSpeedProfile(speed_controller_type controller_type)
+{
+    // apply new profile depending on the controller type
+    if (controller_type == speed_controller_type::linear) {
+        setSpeedProfile(controller_type, _linear_controller.parameters.default_speeds);
+    } else if (controller_type == speed_controller_type::angular) {
+        setSpeedProfile(controller_type, _angular_controller.parameters.default_speeds);
+    }
 }
 
 } // namespace sixtron

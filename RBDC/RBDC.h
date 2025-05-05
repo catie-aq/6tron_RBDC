@@ -72,7 +72,7 @@ typedef struct trapezoid_profile trapezoid_profile;
 
 struct trapezoid_profile {
     float pivot_gain = 0.0f; // fine-tune the distance needed to decelerate properly
-    float precision_gain = 1.0f; // fine-tune the precision when the trapeze must stop
+    float precision_gain = 1.0f; // fine-tune the precision when the trapeze must stop. Between 0-1.
 };
 
 /*!
@@ -141,8 +141,6 @@ struct RBDC_params {
     speed_control_parameters linear_parameters;
     speed_control_parameters angular_parameters;
 
-    float moving_theta_precision = 0.0f;
-    float dv_reducing_coefficient = 0.80f; // coefficient, between 0.0f and 1.0f; (todo: burn this)
     float dt_seconds = 0.0f; // todo: rename "time_step" or equivalent, remove "dt"?
     bool can_go_backward = true; // ignore when holonomic
 };
@@ -191,12 +189,11 @@ public:
 
 private:
     RBDC_params _parameters;
+    bool _standby = false;
 
     Odometry *_odometry;
     MobileBase *_mobile_base;
-
-    bool _standby = false;
-    int _running_direction = RBDC_DIR_FORWARD;
+    speed_controller_instance _linear_controller, _angular_controller;
 
     target_position _target_pos;
     target_speeds _target_vector;
@@ -205,8 +202,8 @@ private:
     target_speeds _rbdc_cmds;
     void updateMobileBase();
 
-    speed_controller_instance _linear_controller, _angular_controller;
-
+    // the following member are only used for a two wheels differential robot
+    int _running_direction = RBDC_DIR_FORWARD;
     float _arrived_theta = 0.0f;
     bool _target_zone_reached = false;
     bool _first_move = true;

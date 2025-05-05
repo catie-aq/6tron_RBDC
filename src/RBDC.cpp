@@ -11,18 +11,6 @@ RBDC::RBDC(Odometry *odometry, MobileBase *mobile_base, const RBDC_params &rbdc_
         _odometry(odometry), _mobile_base(mobile_base), _parameters(rbdc_parameters)
 {
 
-    // todo: this should be removed
-    if (_parameters.dv_reducing_coefficient < 0.0f) {
-        _parameters.dv_reducing_coefficient = 0.0f;
-    } else if (_parameters.dv_reducing_coefficient > 1.0f) {
-        _parameters.dv_reducing_coefficient = 1.0f;
-    }
-
-    // todo: this should be removed
-    // if (_parameters.dv_precision > _parameters.target_precision) {
-    //     _parameters.dv_precision = _parameters.target_precision;
-    // }
-
     // If needed, set default movement behavior for linear and angular speed calculations
     // todo: should both linear and angular default movement be "pid_only"?
     if (_parameters.linear_parameters.movement == speed_movement_type::undefined) {
@@ -32,6 +20,8 @@ RBDC::RBDC(Odometry *odometry, MobileBase *mobile_base, const RBDC_params &rbdc_
         _parameters.angular_parameters.movement = speed_movement_type::pid_only;
     }
 
+    // todo: the following should be a fonction of initialisation, called for each controller
+    // todo: check the precision fine tune parameter!
     // Update control loop instances
     _linear_controller.parameters = _parameters.linear_parameters;
     _angular_controller.parameters = _parameters.angular_parameters;
@@ -344,25 +334,35 @@ RBDC_status RBDC::update()
 
         if (error_linear < _linear_controller.parameters.precision) {
 
-            if (!_target_zone_reached) {
+            // The following play like a hysteresis. Trapeze fine tune gain must be set.
+            if (!_target_zone_reached
+                    && (error_linear < _linear_controller.parameters.precision
+                                    * _linear_controller.parameters.trapeze_tuning
+                                              .precision_gain)) {
                 _target_zone_reached = true;
                 _arrived_theta = _odometry->getTheta(); // save theta the first time we arrived
+                _first_move = true; // reset first move for next target update
             }
 
-            _first_move = true; // reset first move for next target update
+            if (_target_zone_reached) {
 
-            if (_target_pos.correct_final_theta) {
-                // Compute the final angle
-                delta_angle = e_theta_global;
-            } else {
-                // keep the arrived angle has the default one.
-                delta_angle = getDeltaFromTargetTHETA(_arrived_theta, _odometry->getTheta());
-            }
+                // update the delta angle depending on the target type.
+                if (_target_pos.correct_final_theta) {
+                    // Compute the final angle
+                    delta_angle = e_theta_global;
+                } else {
+                    // keep the arrived angle has the default one.
+                    delta_angle = getDeltaFromTargetTHETA(_arrived_theta, _odometry->getTheta());
+                }
 
-            if (fabs(delta_angle) < _angular_controller.parameters.precision) {
-                rbdc_end_status = RBDC_status::RBDC_done;
+                // todo: could be one line function
+                if (fabs(delta_angle) < _angular_controller.parameters.precision) {
+                    rbdc_end_status = RBDC_status::RBDC_done;
+                } else {
+                    rbdc_end_status = RBDC_status::RBDC_correct_final_angle;
+                }
             } else {
-                rbdc_end_status = RBDC_status::RBDC_correct_final_angle;
+                rbdc_end_status = RBDC_status::RBDC_moving; // still moving in the hysteresis zone.
             }
 
         } else {
@@ -399,7 +399,7 @@ RBDC_status RBDC::update()
             }
         }
 
-        // Compute linear and angular commands depending on previous
+        // Compute linear only if we are not reached full target precision or not first moving.
         linear_speed_command = get_speed_command(&_linear_controller,
                 _parameters.dt_seconds,
                 linear_speed,
@@ -408,10 +408,11 @@ RBDC_status RBDC::update()
         angular_speed_command = get_speed_command(
                 &_angular_controller, _parameters.dt_seconds, angular_speed, delta_angle);
 
-        // fix the command sign depending on the running direction
+        // fix the linear command sign depending on the running direction
         linear_speed_command = (_running_direction == RBDC_DIR_FORWARD) ? linear_speed_command
                                                                         : -linear_speed_command;
 
+        // Apply previously calculated commands to the twho wheels differential mobile base.
         _rbdc_cmds.cmd_lin = linear_speed_command;
         _rbdc_cmds.cmd_tan = 0.0f; // nothing for tangential speed in differential mode.
         _rbdc_cmds.cmd_rot = angular_speed_command;

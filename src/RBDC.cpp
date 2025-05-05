@@ -328,9 +328,10 @@ RBDC_status RBDC::update()
     float diff_x = _odometry->getX() - _old_pos.x;
     float diff_y = _odometry->getY() - _old_pos.y;
     float diff_theta = _odometry->getTheta() - _old_pos.theta;
-    // todo: Linear speed should be a class member, could be used by "cancel" function
     float linear_speed = (sqrtf((diff_x * diff_x) + (diff_y * diff_y)) / _parameters.dt_seconds);
     float angular_speed = (diff_theta) / _parameters.dt_seconds; // careful, this can be negative
+
+    // save for next round
     _old_pos.x = _odometry->getX();
     _old_pos.y = _odometry->getY();
     _old_pos.theta = _odometry->getTheta();
@@ -506,14 +507,10 @@ RBDC_status RBDC::update()
     return rbdc_end_status;
 }
 
-// todo: this function should take into account the deceleration!
+// todo: Does this function should take into account the deceleration?
 void RBDC::cancel()
 {
-    _target_pos.pos.x = _odometry->getX();
-    _target_pos.pos.y = _odometry->getY();
-    _target_pos.pos.theta = _odometry->getTheta();
-    _target_pos.correct_final_theta = true;
-    _target_pos.is_a_vector = false;
+    setTarget(_odometry->getX(), _odometry->getY(), _odometry->getTheta());
 }
 
 void RBDC::pause()

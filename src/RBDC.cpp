@@ -326,7 +326,7 @@ RBDC_status RBDC::update()
 
     float linear_speed_command = 0.0f, angular_speed_command = 0.0f;
 
-    if (_parameters.rbdc_format == two_wheels_robot) {
+    if (_parameters.rbdc_format == differential_robot) {
 
         float delta_angle = 0.0f;
 
@@ -417,7 +417,7 @@ RBDC_status RBDC::update()
 
     }
 
-    else if (_parameters.rbdc_format == three_wheels_robot) {
+    else if (_parameters.rbdc_format == holonomic_robot) {
 
         static float polar_angle;
 

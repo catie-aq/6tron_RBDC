@@ -28,8 +28,6 @@ namespace sixtron {
 
 #define RBDC_MAX_STATUS 8
 
-#define RBDC_DEFAULT_SPEED_PROFILE (-1)
-
 typedef enum {
     two_wheels_robot,
     three_wheels_robot,
@@ -56,11 +54,11 @@ typedef enum {
 typedef enum {
     RBDC_standby = 0,
     RBDC_working = 1, // This should never happen, as we cover all the cases at each iteration.
-    RBDC_done = 2, // 1.1.1 robot arrive at target
-    RBDC_correct_final_angle = 3, // 1.1.2
-    RBDC_moving = 4, // 1.2.1
-    RBDC_moving_and_correct_angle = 5, // 1.2.2.1
-    RBDC_correct_initial_angle = 6, // 1.2.2.2
+    RBDC_done = 2, // Robot arrive at target
+    RBDC_correct_final_angle = 3,
+    RBDC_moving = 4,
+    RBDC_moving_and_correct_angle = 5,
+    RBDC_correct_initial_angle = 6,
     RBDC_following_vector = 7,
 } RBDC_status;
 
@@ -130,7 +128,7 @@ struct target_position {
 };
 
 /*!
- *  \struct RBDC_param
+ *  \struct RBDC_params
  *  PID parameters structure
  */
 typedef struct RBDC_params RBDC_params;

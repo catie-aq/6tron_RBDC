@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "RBDC/RBDC.h"
-#include "common.h" // todo: to be removed (temp trapeze debug)
 
 namespace sixtron {
 
@@ -247,7 +246,6 @@ void RBDC::setTarget(target_position rbdc_target_pos)
 
 RBDC_status RBDC::update()
 {
-    static uint32_t timestamp = 1627551892437;
     // ====== Get actual odometry ===========
     _odometry->update();
 
@@ -445,26 +443,8 @@ RBDC_status RBDC::update()
         _rbdc_cmds.cmd_rot = angular_speed_command;
     }
 
-    // terminal_printf(">angular_speed:%d:%f§ms\n>angular_command:%d:%f§ms\n>current_angle:%d:%"
-    //                 "f§ms\n>e_theta_global:%d:%f§ms\n",
-    //         timestamp,
-    //         angular_speed,
-    //         timestamp,
-    //         angular_speed_command,
-    //         timestamp,
-    //         _odometry->getTheta() / 0.017453f,
-    //         timestamp,
-    //         e_theta_global / 0.017453f);
-
-    terminal_printf(">linear_speed:%d:%f§ms\n>linear_command:%d:%f§ms\n",
-            timestamp,
-            linear_speed,
-            timestamp,
-            linear_speed_command);
-
     // ======== Update Motor Base ============
     updateMobileBase();
-    timestamp++;
     return rbdc_end_status;
 }
 

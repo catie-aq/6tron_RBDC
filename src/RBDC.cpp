@@ -338,66 +338,44 @@ RBDC_status RBDC::update()
 
     float linear_speed_command = 0.0f, angular_speed_command = 0.0f;
 
-    // TODO: Two wheels robot broken for now (trapeze dev)
     if (_parameters.rbdc_format == two_wheels_robot) {
 
-        // 1 Q : Is robot inside the target zone ?
-        if ((error_linear < _linear_controller.parameters.precision)
-                && (error_linear > -_linear_controller.parameters.precision)) {
-            // 1.1 A : Yes it is.
+        float delta_angle = 0.0f;
 
-            // Check if robot is inside dv zone. Target zone must be greater than dv zone.
-            if (!_dv_zone_reached
-                    && ((error_linear < _linear_controller.parameters.precision)
-                            && (error_linear > -_linear_controller.parameters.precision))) {
-                _dv_zone_reached = true;
-                _arrived_theta = _odometry->getTheta(); // save arrive theta the first time we
-                                                        // arrived inside dv zone
+        if (error_linear < _linear_controller.parameters.precision) {
+
+            if (!_target_zone_reached) {
+                _target_zone_reached = true;
+                _arrived_theta = _odometry->getTheta(); // save theta the first time we arrived
             }
 
-            // Correct angle ONLY if inside target zone AND dv zone already reached
-            if (_dv_zone_reached) {
-                // Be sure that dv is shutdown
-                _linear_controller.pid->reset();
-                _linear_controller.pid_args.output = 0.0f;
-                _first_move = true; // reset first move for next target update
+            _first_move = true; // reset first move for next target update
 
-                float delta_angle;
-                if (_target_pos.correct_final_theta) {
-                    // Compute the final angle
-                    delta_angle = e_theta_global;
-                } else {
-                    // keep the arrived angle has the default one.
-                    delta_angle = getDeltaFromTargetTHETA(_arrived_theta, _odometry->getTheta());
-                }
+            if (_target_pos.correct_final_theta) {
+                // Compute the final angle
+                delta_angle = e_theta_global;
+            } else {
+                // keep the arrived angle has the default one.
+                delta_angle = getDeltaFromTargetTHETA(_arrived_theta, _odometry->getTheta());
+            }
 
-                // update pid theta
-                _angular_controller.pid_args.actual = 0.0f;
-                _angular_controller.pid_args.target = delta_angle;
-                _angular_controller.pid->compute(&_angular_controller.pid_args);
-
-                // 1.1 Q : Is target angle (or final angle) correct ?
-                if (fabs(delta_angle) < _angular_controller.parameters.precision) {
-                    // 1.1.1 A : Yes it is. The robot base is in target position.
-                    rbdc_end_status = RBDC_status::RBDC_done;
-                } else {
-                    // 1.1.2 A : No it is not.
-                    rbdc_end_status = RBDC_status::RBDC_correct_final_angle;
-                }
+            if (fabs(delta_angle) < _angular_controller.parameters.precision) {
+                rbdc_end_status = RBDC_status::RBDC_done;
+            } else {
+                rbdc_end_status = RBDC_status::RBDC_correct_final_angle;
             }
 
         } else {
-            _dv_zone_reached = false;
-        }
 
-        if (!_dv_zone_reached) {
-            // 1.2 A : No it isn't. The base has to move to the target position.
+            // reset zone reached
+            _target_zone_reached = false;
 
             // Compute the angle error based on target X/Y
             float target_angle = (atan2f((_target_pos.pos.y - _odometry->getY()),
                     (_target_pos.pos.x - _odometry->getX())));
-            float delta_angle = getDeltaFromTargetTHETA(target_angle, _odometry->getTheta());
+            delta_angle = getDeltaFromTargetTHETA(target_angle, _odometry->getTheta());
 
+            // todo: move to a specific function?
             _running_direction = RBDC_DIR_FORWARD;
             // Check if it is better to go backward or not. Update delta angle accordingly.
             if (_parameters.can_go_backward) {
@@ -410,52 +388,34 @@ RBDC_status RBDC::update()
                 }
             }
 
-            // update pid theta
-            _angular_controller.pid_args.actual = 0.0f;
-            _angular_controller.pid_args.target = delta_angle;
-            _angular_controller.pid->compute(&_angular_controller.pid_args);
-
+            // If this is the first move since a target update, correct the angle first
             if (_first_move) {
-                // 1.2.2.2 A
-                // if it is the first move, use a more accurate position instead of
-                // moving_theta_precision
-                if ((fabs(delta_angle) < _angular_controller.parameters.precision)
-                        || _target_pos.is_a_vector) {
+                if (fabs(delta_angle) < _angular_controller.parameters.precision) {
                     _first_move = false;
                 }
                 rbdc_end_status = RBDC_status::RBDC_correct_initial_angle;
-
-                // 1.2 Q : Is the base align with the target position (angle thinking) ?
-                // Or shunt this question if target is a vector.
-            } else if ((fabs(delta_angle) < _parameters.moving_theta_precision)
-                    || _target_pos.is_a_vector) {
-                // 1.2.1 A : Yes it is.
-
-                error_linear = _running_direction * error_linear; // Add direction of moving
-
-                // update pid dv
-                _linear_controller.pid_args.actual = 0.0f;
-                _linear_controller.pid_args.target = error_linear;
-                _linear_controller.pid->compute(&_angular_controller.pid_args);
-
-                rbdc_end_status = RBDC_status::RBDC_moving;
-
             } else {
-                // 1.2.2 A : No it isn't. Angle must be corrected.
-                // 1.2.2.1 A. The Base is probably already moving to the target
-                // position. But, the PID Theta can't keep up (maybe output PWM are already at max)
-                // So we need to reduce the speed, in order for the angle to be corrected correctly.
-
-                _linear_controller.pid_args.output = _linear_controller.pid_args.output
-                        * _parameters.dv_reducing_coefficient; // reduce by given coefficient,
-                                                               // only one time
-
-                rbdc_end_status = RBDC_status::RBDC_moving_and_correct_angle;
+                rbdc_end_status = RBDC_status::RBDC_moving;
             }
         }
 
-        _rbdc_cmds.cmd_lin = _linear_controller.pid_args.output;
-        _rbdc_cmds.cmd_rot = _angular_controller.pid_args.output;
+        // Compute linear and angular commands depending on previous
+        linear_speed_command = get_speed_command(&_linear_controller,
+                _parameters.dt_seconds,
+                linear_speed,
+                (_first_move) ? 0.0f : error_linear);
+
+        angular_speed_command = get_speed_command(
+                &_angular_controller, _parameters.dt_seconds, angular_speed, delta_angle);
+
+        // fix the command sign depending on the running direction
+        linear_speed_command = (_running_direction == RBDC_DIR_FORWARD) ? linear_speed_command
+                                                                        : -linear_speed_command;
+
+        _rbdc_cmds.cmd_lin = linear_speed_command;
+        _rbdc_cmds.cmd_tan = 0.0f; // nothing for tangential speed in differential mode.
+        _rbdc_cmds.cmd_rot = angular_speed_command;
+
     }
 
     else if (_parameters.rbdc_format == three_wheels_robot) {

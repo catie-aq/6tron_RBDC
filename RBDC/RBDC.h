@@ -208,7 +208,7 @@ private:
     speed_controller_instance _linear_controller, _angular_controller;
 
     float _arrived_theta = 0.0f;
-    bool _dv_zone_reached = false;
+    bool _target_zone_reached = false;
     bool _first_move = true;
 };
 

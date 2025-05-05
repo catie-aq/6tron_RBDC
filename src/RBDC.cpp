@@ -3,20 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "RBDC/RBDC.h"
+#include "common.h" // todo: to be removed (temp trapeze debug)
 
 namespace sixtron {
 
 RBDC::RBDC(Odometry *odometry, MobileBase *mobile_base, RBDC_params rbdc_parameters):
-        _odometry(odometry),
-        _mobile_base(mobile_base),
-        _parameters(rbdc_parameters),
-        _pid_linear(rbdc_parameters.linear_control.pid_params, rbdc_parameters.dt_seconds),
-        _pid_angular(rbdc_parameters.angular_control.pid_params, rbdc_parameters.dt_seconds)
+        _odometry(odometry), _mobile_base(mobile_base), _parameters(rbdc_parameters)
 {
-    _pid_linear.setLimit(sixtron::PID_limit::output_limit_HL, _parameters.linear_control.max_speed);
-    _pid_angular.setLimit(
-            sixtron::PID_limit::output_limit_HL, _parameters.angular_control.max_speed);
 
+    // todo: this should be removed
     if (_parameters.dv_reducing_coefficient < 0.0f) {
         _parameters.dv_reducing_coefficient = 0.0f;
     } else if (_parameters.dv_reducing_coefficient > 1.0f) {
@@ -30,16 +25,30 @@ RBDC::RBDC(Odometry *odometry, MobileBase *mobile_base, RBDC_params rbdc_paramet
 
     // If needed, set default movement behavior for linear and angular speed calculations
     // todo: should both linear and angular default movement be "pid_only"?
-    if (_parameters.linear_control.movement == movement_type::undefined) {
-        _parameters.linear_control.movement = movement_type::trapezoidal_only;
+    if (_parameters.linear_parameters.movement == speed_movement_type::undefined) {
+        _parameters.linear_parameters.movement = speed_movement_type::trapezoidal_only;
     }
-    if (_parameters.angular_control.movement == movement_type::undefined) {
-        _parameters.angular_control.movement = movement_type::pid_only;
+    if (_parameters.angular_parameters.movement == speed_movement_type::undefined) {
+        _parameters.angular_parameters.movement = speed_movement_type::pid_only;
     }
 
-    // be sure that the user has not put anything in those values
-    _parameters.linear_control.trapeze.previous_output_speed = 0.0f;
-    _parameters.angular_control.trapeze.previous_output_speed = 0.0f;
+    // Update control loop instances
+    _linear_control.parameters = _parameters.linear_parameters;
+    _angular_control.parameters = _parameters.angular_parameters;
+
+    _linear_control.speeds = _linear_control.parameters.default_speeds;
+    _angular_control.speeds = _angular_control.parameters.default_speeds;
+
+    // Setup PIDs
+    _linear_control.pid
+            = new PID(_linear_control.parameters.pid_params, rbdc_parameters.dt_seconds);
+    _angular_control.pid
+            = new PID(_angular_control.parameters.pid_params, rbdc_parameters.dt_seconds);
+
+    _linear_control.pid->setLimit(sixtron::PID_limit::output_limit_HL,
+            _linear_control.parameters.default_speeds.max_speed);
+    _angular_control.pid->setLimit(sixtron::PID_limit::output_limit_HL,
+            _angular_control.parameters.default_speeds.max_speed);
 
     // initialization
     _odometry->init();
@@ -63,7 +72,7 @@ static inline float getDeltaFromTargetTHETA(float target_angle_deg, float curren
 
 // This function compute the necessary data to do a correct trapezoid movement
 // This algorithm is inspired a lot by Aversive library, written by Microb Technology (Eirbot 2005)
-static float apply_trapeze_profile(speed_control_parameters *speed_params,
+static float apply_trapeze_profile(speed_control_instance *control_instance,
         const float dt_seconds,
         const float remaining_distance,
         float current_speed)
@@ -71,57 +80,56 @@ static float apply_trapeze_profile(speed_control_parameters *speed_params,
     float pivot = 0.0f, speed_increment = 0.0f, output_speed = 0.0f;
 
     // Cap speed input for stability purpose (and validity of calculations)
-    if (current_speed > speed_params->max_speed) {
-        current_speed = speed_params->max_speed;
+    if (current_speed > control_instance->speeds.max_speed) {
+        current_speed = control_instance->speeds.max_speed;
     }
 
     // Pivot Anticipation (useful to counteract the delay induced by the velocity control)
-    pivot = (current_speed * speed_params->trapeze.pivot_gain);
+    pivot = (current_speed * control_instance->parameters.trapeze_tuning.pivot_gain);
 
     // Pivot Compute (the distance when we need to decelerate, depending on the current speed)
-    pivot += current_speed * current_speed / (2.0f * speed_params->max_decel);
+    pivot += current_speed * current_speed / (2.0f * control_instance->speeds.max_decel);
 
     // Check is pivot has been reached or not, define the speed increment accordingly
     if (pivot > remaining_distance) {
-        speed_increment = -(speed_params->max_decel * dt_seconds);
+        speed_increment = -(control_instance->speeds.max_decel * dt_seconds);
     } else {
-        speed_increment = +(speed_params->max_accel * dt_seconds);
+        speed_increment = +(control_instance->speeds.max_accel * dt_seconds);
     }
 
     // Increment the output speed
-    output_speed = speed_params->trapeze.previous_output_speed + speed_increment;
+    output_speed = control_instance->previous_output_speed + speed_increment;
 
     // Cap output speed
-    if (output_speed > speed_params->max_speed) {
-        output_speed = speed_params->max_speed;
+    if (output_speed > control_instance->speeds.max_speed) {
+        output_speed = control_instance->speeds.max_speed;
     } else if (output_speed < 0.0f) {
         output_speed = 0.0f;
     }
 
     // cap to 0 m/s if already in precision
-    if (remaining_distance < (speed_params->precision * speed_params->trapeze.precision_gain)) {
+    if (remaining_distance < (control_instance->parameters.precision
+                * control_instance->parameters.trapeze_tuning.precision_gain)) {
         output_speed = 0.0f;
     }
 
     // Save new speed consign for next time
-    speed_params->trapeze.previous_output_speed = output_speed;
+    control_instance->previous_output_speed = output_speed;
     return output_speed;
 }
 
 // General function to compute the right speed command depending on movement type.
 // This is the equivalent of a modular servo controlled loop.
-static float get_speed_command(speed_control_parameters *speed_control,
+static float get_speed_command(speed_control_instance *control_instance,
         const float dt_seconds,
-        PID *pid,
-        PID_args *pid_args,
         float const actual_speed,
         float const distance_error)
 {
     float speed_command = 0.0f;
 
     // Apply trapeze if set
-    if (speed_control->movement == movement_type::trapezoidal_only
-            || speed_control->movement == movement_type::trapezoidal_and_pid) {
+    if (control_instance->parameters.movement == speed_movement_type::trapezoidal_only
+            || control_instance->parameters.movement == speed_movement_type::trapezoidal_and_pid) {
         float negate_speed = 1.0f;
         float negate_distance_error = 1.0f;
 
@@ -137,7 +145,7 @@ static float get_speed_command(speed_control_parameters *speed_control,
 
         // Compute the right speed consign compared to the current linear distance error
         speed_command = negate_distance_error
-                * apply_trapeze_profile(speed_control,
+                * apply_trapeze_profile(control_instance,
                         dt_seconds,
                         distance_error * negate_distance_error,
                         actual_speed * negate_speed);
@@ -147,20 +155,20 @@ static float get_speed_command(speed_control_parameters *speed_control,
     // It's a speed output control loop, based on distance error input only.
     // PID ramps cannot be used to define properly the max output acceleration/deceleration !
     // PID ramps are only used to "smooth" the input target.
-    if (speed_control->movement == movement_type::pid_only) {
+    if (control_instance->parameters.movement == speed_movement_type::pid_only) {
 
-        pid_args->actual = 0.0f;
-        pid_args->target = distance_error;
+        control_instance->pid_args.actual = 0.0f;
+        control_instance->pid_args.target = distance_error;
 
-        pid->compute(pid_args);
-        speed_command = pid_args->output;
-    } else if (speed_control->movement == movement_type::trapezoidal_and_pid) {
+        control_instance->pid->compute(&control_instance->pid_args);
+        speed_command = control_instance->pid_args.output;
+    } else if (control_instance->parameters.movement == speed_movement_type::trapezoidal_and_pid) {
 
-        pid_args->actual = actual_speed;
-        pid_args->target = speed_command; // previously calculated by the trapeze
+        control_instance->pid_args.actual = actual_speed;
+        control_instance->pid_args.target = speed_command; // previously calculated by the trapeze
 
-        pid->compute(pid_args);
-        speed_command = pid_args->output;
+        control_instance->pid->compute(&control_instance->pid_args);
+        speed_command = control_instance->pid_args.output;
     }
 
     return speed_command;
@@ -253,6 +261,7 @@ void RBDC::setTarget(target_position rbdc_target_pos)
 
 RBDC_status RBDC::update()
 {
+    static uint32_t timestamp = 1627551892437;
     // ====== Get actual odometry ===========
     _odometry->update();
 
@@ -260,12 +269,12 @@ RBDC_status RBDC::update()
 
     if (_standby) {
 
-        _args_pid_linear.output = 0.0f;
-        _args_pid_angular.output = 0.0f;
+        _linear_control.pid_args.output = 0.0f;
+        _angular_control.pid_args.output = 0.0f;
 
         // reset PIDs
-        _pid_linear.reset();
-        _pid_angular.reset();
+        _linear_control.pid->reset();
+        _angular_control.pid->reset();
 
         _rbdc_cmds.cmd_lin = 0.0f;
         _rbdc_cmds.cmd_tan = 0.0f;
@@ -326,18 +335,20 @@ RBDC_status RBDC::update()
     _old_pos.y = _odometry->getY();
     _old_pos.theta = _odometry->getTheta();
 
+    float linear_speed_command = 0.0f, angular_speed_command = 0.0f;
+
     // TODO: Two wheels robot broken for now (trapeze dev)
     if (_parameters.rbdc_format == two_wheels_robot) {
 
         // 1 Q : Is robot inside the target zone ?
-        if ((error_linear < _parameters.linear_control.precision)
-                && (error_linear > -_parameters.linear_control.precision)) {
+        if ((error_linear < _linear_control.parameters.precision)
+                && (error_linear > -_linear_control.parameters.precision)) {
             // 1.1 A : Yes it is.
 
             // Check if robot is inside dv zone. Target zone must be greater than dv zone.
             if (!_dv_zone_reached
-                    && ((error_linear < _parameters.linear_control.precision)
-                            && (error_linear > -_parameters.linear_control.precision))) {
+                    && ((error_linear < _linear_control.parameters.precision)
+                            && (error_linear > -_linear_control.parameters.precision))) {
                 _dv_zone_reached = true;
                 _arrived_theta = _odometry->getTheta(); // save arrive theta the first time we
                                                         // arrived inside dv zone
@@ -346,8 +357,8 @@ RBDC_status RBDC::update()
             // Correct angle ONLY if inside target zone AND dv zone already reached
             if (_dv_zone_reached) {
                 // Be sure that dv is shutdown
-                _pid_linear.reset();
-                _args_pid_linear.output = 0.0f;
+                _linear_control.pid->reset();
+                _linear_control.pid_args.output = 0.0f;
                 _first_move = true; // reset first move for next target update
 
                 float delta_angle;
@@ -360,12 +371,12 @@ RBDC_status RBDC::update()
                 }
 
                 // update pid theta
-                _args_pid_angular.actual = 0.0f;
-                _args_pid_angular.target = delta_angle;
-                _pid_angular.compute(&_args_pid_angular);
+                _angular_control.pid_args.actual = 0.0f;
+                _angular_control.pid_args.target = delta_angle;
+                _angular_control.pid->compute(&_angular_control.pid_args);
 
                 // 1.1 Q : Is target angle (or final angle) correct ?
-                if (fabs(delta_angle) < _parameters.angular_control.precision) {
+                if (fabs(delta_angle) < _angular_control.parameters.precision) {
                     // 1.1.1 A : Yes it is. The robot base is in target position.
                     rbdc_end_status = RBDC_status::RBDC_done;
                 } else {
@@ -399,15 +410,15 @@ RBDC_status RBDC::update()
             }
 
             // update pid theta
-            _args_pid_angular.actual = 0.0f;
-            _args_pid_angular.target = delta_angle;
-            _pid_angular.compute(&_args_pid_angular);
+            _angular_control.pid_args.actual = 0.0f;
+            _angular_control.pid_args.target = delta_angle;
+            _angular_control.pid->compute(&_angular_control.pid_args);
 
             if (_first_move) {
                 // 1.2.2.2 A
                 // if it is the first move, use a more accurate position instead of
                 // moving_theta_precision
-                if ((fabs(delta_angle) < _parameters.angular_control.precision)
+                if ((fabs(delta_angle) < _angular_control.parameters.precision)
                         || _target_pos.is_a_vector) {
                     _first_move = false;
                 }
@@ -422,9 +433,9 @@ RBDC_status RBDC::update()
                 error_linear = _running_direction * error_linear; // Add direction of moving
 
                 // update pid dv
-                _args_pid_linear.actual = 0.0f;
-                _args_pid_linear.target = error_linear;
-                _pid_linear.compute(&_args_pid_linear);
+                _linear_control.pid_args.actual = 0.0f;
+                _linear_control.pid_args.target = error_linear;
+                _linear_control.pid->compute(&_angular_control.pid_args);
 
                 rbdc_end_status = RBDC_status::RBDC_moving;
 
@@ -434,7 +445,7 @@ RBDC_status RBDC::update()
                 // position. But, the PID Theta can't keep up (maybe output PWM are already at max)
                 // So we need to reduce the speed, in order for the angle to be corrected correctly.
 
-                _args_pid_linear.output = _args_pid_linear.output
+                _linear_control.pid_args.output = _linear_control.pid_args.output
                         * _parameters.dv_reducing_coefficient; // reduce by given coefficient,
                                                                // only one time
 
@@ -442,8 +453,8 @@ RBDC_status RBDC::update()
             }
         }
 
-        _rbdc_cmds.cmd_lin = _args_pid_linear.output;
-        _rbdc_cmds.cmd_rot = _args_pid_angular.output;
+        _rbdc_cmds.cmd_lin = _linear_control.pid_args.output;
+        _rbdc_cmds.cmd_rot = _angular_control.pid_args.output;
     }
 
     else if (_parameters.rbdc_format == three_wheels_robot) {
@@ -451,26 +462,18 @@ RBDC_status RBDC::update()
         static float polar_angle;
 
         // condition to consider target reached
-        if ((error_linear < _parameters.linear_control.precision)
-                && (e_theta_global < _parameters.angular_control.precision)) {
+        if ((error_linear < _linear_control.parameters.precision)
+                && (e_theta_global < _angular_control.parameters.precision)) {
             rbdc_end_status = RBDC_status::RBDC_done;
         } else {
             rbdc_end_status = RBDC_status::RBDC_moving;
         }
 
-        float linear_speed_command = get_speed_command(&_parameters.linear_control,
-                _parameters.dt_seconds,
-                &_pid_linear,
-                &_args_pid_linear,
-                linear_speed,
-                error_linear);
+        linear_speed_command = get_speed_command(
+                &_linear_control, _parameters.dt_seconds, linear_speed, error_linear);
 
-        float angular_speed_command = get_speed_command(&_parameters.angular_control,
-                _parameters.dt_seconds,
-                &_pid_angular,
-                &_args_pid_angular,
-                angular_speed,
-                e_theta_global);
+        angular_speed_command = get_speed_command(
+                &_angular_control, _parameters.dt_seconds, angular_speed, e_theta_global);
 
         // todo: optimized
         polar_angle = atan2f(e_y_global, e_x_global);
@@ -480,9 +483,26 @@ RBDC_status RBDC::update()
         _rbdc_cmds.cmd_rot = angular_speed_command;
     }
 
+    // terminal_printf(">angular_speed:%d:%f§ms\n>angular_command:%d:%f§ms\n>current_angle:%d:%"
+    //                 "f§ms\n>e_theta_global:%d:%f§ms\n",
+    //         timestamp,
+    //         angular_speed,
+    //         timestamp,
+    //         angular_speed_command,
+    //         timestamp,
+    //         _odometry->getTheta() / 0.017453f,
+    //         timestamp,
+    //         e_theta_global / 0.017453f);
+
+    terminal_printf(">linear_speed:%d:%f§ms\n>linear_command:%d:%f§ms\n",
+            timestamp,
+            linear_speed,
+            timestamp,
+            linear_speed_command);
+
     // ======== Update Motor Base ============
     updateMobileBase();
-
+    timestamp++;
     return rbdc_end_status;
 }
 

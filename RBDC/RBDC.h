@@ -28,6 +28,8 @@ namespace sixtron {
 
 #define RBDC_MAX_STATUS 8
 
+#define RBDC_DEFAULT_SPEED_PROFILE (-1)
+
 typedef enum {
     two_wheels_robot,
     three_wheels_robot,
@@ -44,7 +46,12 @@ typedef enum {
     pid_only, // generally for the angle only
     trapezoidal_only, // when the mobile base and the motors have a great response to speed command
     trapezoidal_and_pid, // when the mobile base need a linear speed control after trapeze output
-} movement_type;
+} speed_movement_type;
+
+typedef enum {
+    linear,
+    angular
+} speed_control_type;
 
 typedef enum {
     RBDC_standby = 0,
@@ -66,24 +73,31 @@ typedef struct trapezoid_profile trapezoid_profile;
 struct trapezoid_profile {
     float pivot_gain = 0.0f; // fine-tune the distance needed to decelerate properly
     float precision_gain = 1.0f; // fine-tune the precision when the trapeze must stop
-    float previous_output_speed = 0.0f; // todo: trapeze backup value, should be elsewhere
+};
+
+/*!
+ *  \struct speed_profile
+ *  Speed profile structure to define max speed and accelerations
+ */
+typedef struct speed_profile speed_profile;
+
+struct speed_profile {
+    float max_accel = 0.0f; // max acceleration when ramping up in [m/s²].
+    float max_decel = 0.0f; // max deceleration when ramping down in [m/s²].
+    float max_speed = 0.0f; // max speed (positive or negative) in [m/s].
 };
 
 /*!
  *  \struct speed_control_parameters
- *  Velocity controle parameters for the given speed type (linear or angular)
+ *  Velocity control parameters for the given speed type (linear or angular)
  */
 typedef struct speed_control_parameters speed_control_parameters;
 
 struct speed_control_parameters {
-    float max_accel = 0.0f; // max acceleration when ramping up in [m/s²].
-    float max_decel = 0.0f; // max deceleration when ramping down in [m/s²].
-    float max_speed = 0.0f; // max speed (positive or negative) in [m/s].
-    trapezoid_profile trapeze;
-    movement_type movement = movement_type::undefined;
+    speed_profile default_speeds;
+    trapezoid_profile trapeze_tuning;
+    speed_movement_type movement = speed_movement_type::undefined;
     float precision = 0.0f;
-    // PID *pid = nullptr; // not sure if it is a good idea here
-    // PID_args pid_args; // same comment
     PID_params pid_params;
 };
 
@@ -101,6 +115,20 @@ struct speed_control_parameters {
  */
 
 /*!
+ *  \struct speed_control_instance
+ *  Velocity control instance, use privately by the RBDC
+ */
+typedef struct speed_control_instance speed_control_instance;
+
+struct speed_control_instance {
+    speed_control_parameters parameters;
+    speed_profile speeds;
+    float previous_output_speed = 0.0f; // trapeze output backup
+    PID *pid = nullptr;
+    PID_args pid_args;
+};
+
+/*!
  *  \struct target_position
  *  RBDC target position
  */
@@ -109,7 +137,7 @@ typedef struct target_position target_position;
 struct target_position {
     position pos;
     RBDC_reference ref = RBDC_reference::absolute; // global plane reference by default
-
+    // todo: let the user specify custom acceleration profile for each target?
     bool correct_final_theta = true; // will be set to false when no angle is provided
     bool is_a_vector = false; // when true, pos will be read as a "target_speeds" vector
 };
@@ -122,15 +150,11 @@ typedef struct RBDC_params RBDC_params;
 
 struct RBDC_params {
     RBDC_format rbdc_format = two_wheels_robot;
-    // PID_params pid_param_dv, pid_param_dteta;
 
-    speed_control_parameters linear_control;
-    speed_control_parameters angular_control;
+    speed_control_parameters linear_parameters;
+    speed_control_parameters angular_parameters;
 
-    // float final_theta_precision = 0.0f;
     float moving_theta_precision = 0.0f;
-    // float target_precision = 0.5f;
-    // float dv_precision = 0.0f; // todo: this must disappear
     float dv_reducing_coefficient = 0.80f; // coefficient, between 0.0f and 1.0f; (todo: burn this)
     float dt_seconds = 0.0f; // todo: rename "time_step" or equivalent, remove "dt"?
     bool can_go_backward = true; // ignore when holonomic
@@ -158,6 +182,12 @@ public:
     // Main setTarget function, the one function to rule them all
     void setTarget(target_position rbdc_target_pos);
 
+    // Manually change speed profile if needed
+    void setSpeedProfile(
+            speed_control_type control_type, float max_acc, float max_decel, float max_speed);
+    void setSpeedProfile(speed_control_type control_type, speed_profile profile);
+    void resetSpeedProfile(speed_control_type control_type);
+
     void cancel(); // cancel current target.
     void pause(); // save current goal, wait for next start to continue
     void stop(); // cancel current target and put RBDC in standby mode. Need start to wake up.
@@ -173,23 +203,22 @@ public:
     target_position getTarget();
 
 private:
-    target_speeds _rbdc_cmds;
-    bool _standby = false;
-    int _running_direction;
-    void updateMobileBase();
+    RBDC_params _parameters;
 
     Odometry *_odometry;
     MobileBase *_mobile_base;
 
-    RBDC_params _parameters;
+    bool _standby = false;
+    int _running_direction;
+
     target_position _target_pos;
-    position _old_pos;
     target_speeds _target_vector;
+    position _old_pos;
 
-    float _old_angular_speed = 0.0f, _old_linear_speed = 0.0f;
+    target_speeds _rbdc_cmds;
+    void updateMobileBase();
 
-    PID _pid_linear, _pid_angular;
-    PID_args _args_pid_linear, _args_pid_angular;
+    speed_control_instance _linear_control, _angular_control;
 
     float _arrived_theta = 0.0f;
     bool _dv_zone_reached = false;

@@ -260,13 +260,34 @@ RBDC_status RBDC::update()
         _linear_controller.pid->reset();
         _angular_controller.pid->reset();
 
-        // reset trapeze
-        _linear_controller.previous_output_speed = 0.0f;
-        _angular_controller.previous_output_speed = 0.0f;
+        // if decelerate_when_stanby is set: //todo: create this configuration variable!!
+        float linear_decelerate_speed = _linear_controller.previous_output_speed - (_linear_controller.speeds.max_decel * _parameters.dt_seconds);
+        float angular_decelerate_speed = _angular_controller.previous_output_speed - (_angular_controller.speeds.max_decel * _parameters.dt_seconds);
+        if (linear_decelerate_speed < 0.0f) {
+            linear_decelerate_speed = 0.0f;
+        }
+        if (angular_decelerate_speed < 0.0f) {
+            angular_decelerate_speed = 0.0f;
+        }
+        _linear_controller.previous_output_speed = linear_decelerate_speed;
+        _angular_controller.previous_output_speed = angular_decelerate_speed;
 
-        _rbdc_cmds.cmd_lin = 0.0f;
-        _rbdc_cmds.cmd_tan = 0.0f;
-        _rbdc_cmds.cmd_rot = 0.0f;
+        // reset trapeze
+        // _linear_controller.previous_output_speed = 0.0f;
+        // _angular_controller.previous_output_speed = 0.0f;
+
+        // _rbdc_cmds.cmd_lin = 0.0f;
+        // _rbdc_cmds.cmd_tan = 0.0f;
+        // _rbdc_cmds.cmd_rot = 0.0f;
+
+        // fix the linear command sign depending on the running direction
+        linear_decelerate_speed = (_running_direction == RBDC_DIR_FORWARD) ? linear_decelerate_speed
+                                                                        : -linear_decelerate_speed;
+
+        // Apply previously calculated commands to the twho wheels differential mobile base.
+        _rbdc_cmds.cmd_lin = linear_decelerate_speed;
+        _rbdc_cmds.cmd_tan = 0.0f; // nothing for tangential speed in differential mode.
+        _rbdc_cmds.cmd_rot = angular_decelerate_speed;
 
         updateMobileBase();
 

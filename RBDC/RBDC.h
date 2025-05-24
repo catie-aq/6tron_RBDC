@@ -140,6 +140,7 @@ struct RBDC_params {
 
     float dt_seconds = 0.0f; // todo: rename "time_step" or equivalent, remove "dt"?
     bool can_go_backward = true; // ignore when holonomic
+    bool decelerate_when_standby = true;
 };
 
 class RBDC {
@@ -170,7 +171,7 @@ public:
     void setSpeedProfile(speed_controller_type controller_type, speed_profile profile);
     void resetSpeedProfile(speed_controller_type controller_type);
 
-    void cancel(); // cancel current target.
+    void cancel(); // cancel current target. Be aware that the RBDC will first standby to decelerate
     void pause(); // save current goal, wait for next start to continue
     void stop(); // cancel current target and put RBDC in standby mode. Need start to wake up.
     void start(); // get out of standby mode.
@@ -187,6 +188,8 @@ public:
 private:
     RBDC_params _parameters;
     bool _standby = false;
+    bool _cancel_requested = false;
+    void cancel_target();
 
     Odometry *_odometry;
     MobileBase *_mobile_base;
@@ -197,7 +200,14 @@ private:
     position _old_pos;
 
     target_speeds _rbdc_cmds;
+    float _linear_speed_command = 0.0f, _angular_speed_command = 0.0f;
     void updateMobileBase();
+    void updateMobileBase(const target_speeds &mobile_base_cmds);
+    void startMobileBase();
+    void stopMobileBase();
+
+    // the following member are only used for an holonomic robot
+    float _polar_angle;
 
     // the following member are only used for a two wheels differential robot
     int _running_direction = RBDC_DIR_FORWARD;

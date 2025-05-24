@@ -271,6 +271,18 @@ RBDC_status RBDC::update()
 
     if (_standby || _cancel_requested) {
 
+        if (_linear_speed_command == 0.0f && _angular_speed_command == 0.0f) {
+
+            if (_cancel_requested) {
+                cancel_target();
+                _cancel_requested = false;
+            }
+
+            // End of decelerating:
+            // if all speeds are 0.0f, and _standby is still set, we can fully stop the mobile base.
+            stopMobileBase();
+        }
+
         _linear_controller.pid_args.output = 0.0f;
         _angular_controller.pid_args.output = 0.0f;
 
@@ -284,12 +296,12 @@ RBDC_status RBDC::update()
         _angular_speed_command
                 = get_standby_decelerate_command(&_angular_controller, _parameters.dt_seconds);
 
-        // fix the linear command sign depending on the running direction
-
         updateMobileBase();
-
         return RBDC_status::RBDC_standby;
     }
+
+    // if no standby, then start mobile base for the rest of the update
+    startMobileBase();
 
     // ======= Vector check ================
 
@@ -462,12 +474,11 @@ RBDC_status RBDC::update()
 
     // ======== Update Mobile Base ============
 
-    startMobileBase();
     updateMobileBase();
     return rbdc_end_status;
 }
 
-// public function : will now take into account deceleration
+// public function: will now take into account deceleration
 void RBDC::cancel()
 {
     _cancel_requested = true; // wait for the mobile base to decelerate before cancel
@@ -529,7 +540,6 @@ void RBDC::updateMobileBase()
 void RBDC::updateMobileBase(const target_speeds &mobile_base_cmds)
 {
     _mobile_base->setTargetSpeeds(mobile_base_cmds);
-    // _standby == true ? (_mobile_base->stop()) : (_mobile_base->start());
     _mobile_base->update();
 }
 

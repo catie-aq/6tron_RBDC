@@ -170,7 +170,7 @@ public:
     void setSpeedProfile(speed_controller_type controller_type, speed_profile profile);
     void resetSpeedProfile(speed_controller_type controller_type);
 
-    void cancel(); // cancel current target.
+    void cancel(); // cancel current target. Be aware that the RBDC will first standby to decelerate
     void pause(); // save current goal, wait for next start to continue
     void stop(); // cancel current target and put RBDC in standby mode. Need start to wake up.
     void start(); // get out of standby mode.

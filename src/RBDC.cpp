@@ -236,6 +236,11 @@ void RBDC::setVector(target_speeds rbdc_target_speeds, RBDC_reference reference)
 void RBDC::setTarget(target_position rbdc_target_pos)
 {
 
+    // if cancel requested, but setTarget is called, then no need to wait for the robot to decel.
+    if (_cancel_requested) {
+        _cancel_requested = false;
+    }
+
     // If it is a vector, do nothing else
     if (rbdc_target_pos.is_a_vector) {
         _target_pos = rbdc_target_pos;

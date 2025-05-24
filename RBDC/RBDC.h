@@ -187,6 +187,8 @@ public:
 private:
     RBDC_params _parameters;
     bool _standby = false;
+    bool _cancel_requested = false;
+    void cancel_target();
 
     Odometry *_odometry;
     MobileBase *_mobile_base;
@@ -197,7 +199,14 @@ private:
     position _old_pos;
 
     target_speeds _rbdc_cmds;
+    float _linear_speed_command = 0.0f, _angular_speed_command = 0.0f;
     void updateMobileBase();
+    void updateMobileBase(const target_speeds &mobile_base_cmds);
+    void startMobileBase();
+    void stopMobileBase();
+
+    // the following member are only used for an holonomic robot
+    float _polar_angle;
 
     // the following member are only used for a two wheels differential robot
     int _running_direction = RBDC_DIR_FORWARD;

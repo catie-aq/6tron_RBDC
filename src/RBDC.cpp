@@ -159,6 +159,24 @@ static float get_speed_command(speed_controller_instance *control_instance,
     return speed_command;
 }
 
+static float get_standby_decelerate_command(
+        speed_controller_instance *control_instance, const float dt_seconds)
+{
+    float decelerate_speed = 0.0f;
+
+    if (control_instance->speeds.max_decel > 0.0f) {
+        decelerate_speed = control_instance->previous_output_speed
+                - (control_instance->speeds.max_decel * dt_seconds);
+
+        if (decelerate_speed < 0.0f) {
+            decelerate_speed = 0.0f;
+        }
+    }
+
+    control_instance->previous_output_speed = decelerate_speed;
+    return decelerate_speed;
+}
+
 void RBDC::setTarget(float x, float y, RBDC_reference reference)
 {
     target_position target;
@@ -251,7 +269,7 @@ RBDC_status RBDC::update()
 
     // ======= Standby check ================
 
-    if (_standby) {
+    if (_standby || _cancel_requested) {
 
         _linear_controller.pid_args.output = 0.0f;
         _angular_controller.pid_args.output = 0.0f;
@@ -260,37 +278,13 @@ RBDC_status RBDC::update()
         _linear_controller.pid->reset();
         _angular_controller.pid->reset();
 
-        // if decelerate_when_stanby is set: //todo: create this configuration variable!!
-        float linear_decelerate_speed = _linear_controller.previous_output_speed
-                - (_linear_controller.speeds.max_decel * _parameters.dt_seconds);
-        float angular_decelerate_speed = _angular_controller.previous_output_speed
-                - (_angular_controller.speeds.max_decel * _parameters.dt_seconds);
-        if (linear_decelerate_speed < 0.0f) {
-            linear_decelerate_speed = 0.0f;
-        }
-        if (angular_decelerate_speed < 0.0f) {
-            angular_decelerate_speed = 0.0f;
-        }
-        _linear_controller.previous_output_speed = linear_decelerate_speed;
-        _angular_controller.previous_output_speed = angular_decelerate_speed;
-
-        // reset trapeze
-        // _linear_controller.previous_output_speed = 0.0f;
-        // _angular_controller.previous_output_speed = 0.0f;
-
-        // _rbdc_cmds.cmd_lin = 0.0f;
-        // _rbdc_cmds.cmd_tan = 0.0f;
-        // _rbdc_cmds.cmd_rot = 0.0f;
+        // if decelerate_when_standby is set: //todo: create this configuration variable?
+        _linear_speed_command
+                = get_standby_decelerate_command(&_linear_controller, _parameters.dt_seconds);
+        _angular_speed_command
+                = get_standby_decelerate_command(&_angular_controller, _parameters.dt_seconds);
 
         // fix the linear command sign depending on the running direction
-        linear_decelerate_speed = (_running_direction == RBDC_DIR_FORWARD)
-                ? linear_decelerate_speed
-                : -linear_decelerate_speed;
-
-        // Apply previously calculated commands to the twho wheels differential mobile base.
-        _rbdc_cmds.cmd_lin = linear_decelerate_speed;
-        _rbdc_cmds.cmd_tan = 0.0f; // nothing for tangential speed in differential mode.
-        _rbdc_cmds.cmd_rot = angular_decelerate_speed;
 
         updateMobileBase();
 
@@ -313,7 +307,7 @@ RBDC_status RBDC::update()
             _rbdc_cmds = _target_vector;
         }
         //! CAREFUL: by doing that, all accelerating ramp are shunted. No PID is used.
-        updateMobileBase();
+        updateMobileBase(_rbdc_cmds);
         return RBDC_status::RBDC_following_vector; // In this mode, RBDC will always (and only)
                                                    // following a vector.
     }
@@ -348,7 +342,7 @@ RBDC_status RBDC::update()
     _old_pos.y = _odometry->getY();
     _old_pos.theta = _odometry->getTheta();
 
-    float linear_speed_command = 0.0f, angular_speed_command = 0.0f;
+    // float linear_speed_command = 0.0f, angular_speed_command = 0.0f;
 
     if (_parameters.rbdc_format == differential_robot) {
 
@@ -422,22 +416,23 @@ RBDC_status RBDC::update()
         }
 
         // Compute linear only if we are not reached full target precision or not first moving.
-        linear_speed_command = get_speed_command(&_linear_controller,
+        _linear_speed_command = get_speed_command(&_linear_controller,
                 _parameters.dt_seconds,
                 linear_speed,
                 (_first_move) ? 0.0f : error_linear);
 
-        angular_speed_command = get_speed_command(
+        _angular_speed_command = get_speed_command(
                 &_angular_controller, _parameters.dt_seconds, angular_speed, delta_angle);
 
-        // fix the linear command sign depending on the running direction
-        linear_speed_command = (_running_direction == RBDC_DIR_FORWARD) ? linear_speed_command
-                                                                        : -linear_speed_command;
+        // // fix the linear command sign depending on the running direction
+        // _linear_speed_command = (_running_direction == RBDC_DIR_FORWARD) ? _linear_speed_command
+        //                                                                  :
+        //                                                                  -_linear_speed_command;
 
-        // Apply previously calculated commands to the twho wheels differential mobile base.
-        _rbdc_cmds.cmd_lin = linear_speed_command;
-        _rbdc_cmds.cmd_tan = 0.0f; // nothing for tangential speed in differential mode.
-        _rbdc_cmds.cmd_rot = angular_speed_command;
+        // // Apply previously calculated commands to the twho wheels differential mobile base.
+        // _rbdc_cmds.cmd_lin = linear_speed_command;
+        // _rbdc_cmds.cmd_tan = 0.0f; // nothing for tangential speed in differential mode.
+        // _rbdc_cmds.cmd_rot = angular_speed_command;
 
     }
 
@@ -451,27 +446,35 @@ RBDC_status RBDC::update()
             rbdc_end_status = RBDC_status::RBDC_moving;
         }
 
-        linear_speed_command = get_speed_command(
+        _linear_speed_command = get_speed_command(
                 &_linear_controller, _parameters.dt_seconds, linear_speed, error_linear);
 
-        angular_speed_command = get_speed_command(
+        _angular_speed_command = get_speed_command(
                 &_angular_controller, _parameters.dt_seconds, angular_speed, e_theta_global);
 
         // todo: optimized
-        float polar_angle = atan2f(e_y_global, e_x_global);
+        _polar_angle = atan2f(e_y_global, e_x_global);
 
-        _rbdc_cmds.cmd_lin = linear_speed_command * cosf(polar_angle - _odometry->getTheta());
-        _rbdc_cmds.cmd_tan = linear_speed_command * sinf(polar_angle - _odometry->getTheta());
-        _rbdc_cmds.cmd_rot = angular_speed_command;
+        // _rbdc_cmds.cmd_lin = linear_speed_command * cosf(_polar_angle - _odometry->getTheta());
+        // _rbdc_cmds.cmd_tan = linear_speed_command * sinf(_polar_angle - _odometry->getTheta());
+        // _rbdc_cmds.cmd_rot = angular_speed_command;
     }
 
-    // ======== Update Motor Base ============
+    // ======== Update Mobile Base ============
+
+    startMobileBase();
     updateMobileBase();
     return rbdc_end_status;
 }
 
-// todo: Does this function should take into account the deceleration?
+// public function : will now take into account deceleration
 void RBDC::cancel()
+{
+    _cancel_requested = true; // wait for the mobile base to decelerate before cancel
+}
+
+// internal function, will be called only when the mobile base finish to decelerate.
+void RBDC::cancel_target()
 {
     setTarget(_odometry->getX(), _odometry->getY(), _odometry->getTheta());
 }
@@ -501,9 +504,43 @@ int RBDC::getRunningDirection()
 
 void RBDC::updateMobileBase()
 {
-    _mobile_base->setTargetSpeeds(_rbdc_cmds);
-    _standby == true ? (_mobile_base->stop()) : (_mobile_base->start());
+
+    if (_parameters.rbdc_format == differential_robot) {
+
+        // fix the linear command sign depending on the running direction
+        _linear_speed_command = (_running_direction == RBDC_DIR_FORWARD) ? _linear_speed_command
+                                                                         : -_linear_speed_command;
+
+        // Apply previously calculated commands to the twho wheels differential mobile base.
+        _rbdc_cmds.cmd_lin = _linear_speed_command;
+        _rbdc_cmds.cmd_tan = 0.0f; // nothing for tangential speed in differential mode.
+        _rbdc_cmds.cmd_rot = _angular_speed_command;
+
+    } else if (_parameters.rbdc_format == holonomic_robot) {
+
+        _rbdc_cmds.cmd_lin = _linear_speed_command * cosf(_polar_angle - _odometry->getTheta());
+        _rbdc_cmds.cmd_tan = _linear_speed_command * sinf(_polar_angle - _odometry->getTheta());
+        _rbdc_cmds.cmd_rot = _angular_speed_command;
+    }
+
+    updateMobileBase(_rbdc_cmds);
+}
+
+void RBDC::updateMobileBase(const target_speeds &mobile_base_cmds)
+{
+    _mobile_base->setTargetSpeeds(mobile_base_cmds);
+    // _standby == true ? (_mobile_base->stop()) : (_mobile_base->start());
     _mobile_base->update();
+}
+
+void RBDC::startMobileBase()
+{
+    _mobile_base->start();
+}
+
+void RBDC::stopMobileBase()
+{
+    _mobile_base->stop();
 }
 
 void RBDC::setAbsolutePosition(float x, float y, float theta)

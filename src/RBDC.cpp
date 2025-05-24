@@ -364,8 +364,6 @@ RBDC_status RBDC::update()
     _old_pos.y = _odometry->getY();
     _old_pos.theta = _odometry->getTheta();
 
-    // float linear_speed_command = 0.0f, angular_speed_command = 0.0f;
-
     if (_parameters.rbdc_format == differential_robot) {
 
         float delta_angle = 0.0f;
@@ -446,16 +444,6 @@ RBDC_status RBDC::update()
         _angular_speed_command = get_speed_command(
                 &_angular_controller, _parameters.dt_seconds, angular_speed, delta_angle);
 
-        // // fix the linear command sign depending on the running direction
-        // _linear_speed_command = (_running_direction == RBDC_DIR_FORWARD) ? _linear_speed_command
-        //                                                                  :
-        //                                                                  -_linear_speed_command;
-
-        // // Apply previously calculated commands to the twho wheels differential mobile base.
-        // _rbdc_cmds.cmd_lin = linear_speed_command;
-        // _rbdc_cmds.cmd_tan = 0.0f; // nothing for tangential speed in differential mode.
-        // _rbdc_cmds.cmd_rot = angular_speed_command;
-
     }
 
     else if (_parameters.rbdc_format == holonomic_robot) {
@@ -477,9 +465,6 @@ RBDC_status RBDC::update()
         // todo: optimized
         _polar_angle = atan2f(e_y_global, e_x_global);
 
-        // _rbdc_cmds.cmd_lin = linear_speed_command * cosf(_polar_angle - _odometry->getTheta());
-        // _rbdc_cmds.cmd_tan = linear_speed_command * sinf(_polar_angle - _odometry->getTheta());
-        // _rbdc_cmds.cmd_rot = angular_speed_command;
     }
 
     // ======== Update Mobile Base ============

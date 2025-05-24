@@ -140,6 +140,7 @@ struct RBDC_params {
 
     float dt_seconds = 0.0f; // todo: rename "time_step" or equivalent, remove "dt"?
     bool can_go_backward = true; // ignore when holonomic
+    bool decelerate_when_standby = true;
 };
 
 class RBDC {

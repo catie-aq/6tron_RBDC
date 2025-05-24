@@ -295,11 +295,16 @@ RBDC_status RBDC::update()
         _linear_controller.pid->reset();
         _angular_controller.pid->reset();
 
-        // if decelerate_when_standby is set: //todo: create this configuration variable?
-        _linear_speed_command
-                = get_standby_decelerate_command(&_linear_controller, _parameters.dt_seconds);
-        _angular_speed_command
-                = get_standby_decelerate_command(&_angular_controller, _parameters.dt_seconds);
+        // zero by default before applying deceleration
+        _linear_speed_command = 0.0f;
+        _angular_speed_command = 0.0f;
+
+        if (_parameters.decelerate_when_standby) {
+            _linear_speed_command
+                    = get_standby_decelerate_command(&_linear_controller, _parameters.dt_seconds);
+            _angular_speed_command
+                    = get_standby_decelerate_command(&_angular_controller, _parameters.dt_seconds);
+        }
 
         updateMobileBase();
         return RBDC_status::RBDC_standby;
@@ -371,7 +376,7 @@ RBDC_status RBDC::update()
             if (!_target_zone_reached
                     && (error_linear < _linear_controller.parameters.precision
                                     * _linear_controller.parameters.trapeze_tuning
-                                              .precision_gain)) {
+                                            .precision_gain)) {
                 _target_zone_reached = true;
                 _arrived_theta = _odometry->getTheta(); // save theta the first time we arrived
                 _first_move = true; // reset first move for next target update
